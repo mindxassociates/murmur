@@ -1,6 +1,6 @@
 {
   "name": "murmur-tauri",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "description": "Murmur - Tauri 2 + Web UI + SQLCipher + local Whisper/LLM engines",
   "scripts": {

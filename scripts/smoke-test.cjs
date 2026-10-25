@@ -216,6 +216,21 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   $('aiRecSource').value = 'mic'; w.onRecSourceChange();
   check('source switches back to microphone', w.desktopDB.getPref('aiRecSource') === 'mic');
 
+  // Android adaptations (V1.4.0): bundled engines, telehealth source disabled
+  const origAiStatus = w.desktopDB.aiStatus;
+  w.desktopDB.aiStatus = async () => ({ os: 'android', whisper: { found: true, path: '/data/app/lib/libwhisper-cli.so' }, llama: { found: true, path: '/data/app/lib/libllama-cli.so' }, models: [], modelsDir: '/data/models', download: null, proc: null });
+  await w.refreshAiStatus(); await tick(40);
+  check('android: telehealth source option disabled', $('aiRecSource').querySelector('option[value="tele"]').disabled === true);
+  check('android: hint explains telehealth unavailable', $('aiRecHint').textContent.includes('not available on Android'));
+  w.showView('models'); await tick(60); await flush();
+  check('android: models view shows bundled-engines note', $('modelsBody').innerHTML.includes('built into the app'));
+  check('android: no engine download buttons offered', !$('modelsBody').innerHTML.includes('Download engine'));
+  w.desktopDB.aiStatus = origAiStatus;
+  w.eval("window.__murmurOs=''");
+  $('aiRecSource').querySelector('option[value="tele"]').disabled = false;
+  await w.refreshAiStatus(); await tick(40);
+  check('desktop state restored after android simulation (llm model selectable)', !!$('aiLlmModel').value);
+
   // Brief-summary mode also generates (and also carries the custom template)
   w.showView('studio');
   $('aiBrief').value = 'Client reports work stress and two weeks of poor sleep.';
@@ -247,7 +262,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   // Standing rules: no third-party product names in the UI, no localStorage business data
   check('no borrowed-product names appear in UI/docs strings', !new RegExp(['Confi','dant'].join('') + '|' + ['Open','Evidence'].join(''), 'i').test(html));
   check('no localStorage used', !/localStorage/.test(html));
-  check('version V1.3.0 in UI', html.includes('Desktop V1.3.0'));
+  check('version V1.4.0 in UI', html.includes('Desktop V1.4.0'));
 
   // Delete flows
   const noteId = savedState().sessions[0].id;

@@ -1,9 +1,10 @@
-# Start Here — Murmur V1.3.0
+# Start Here — Murmur V1.4.0
 
 ## Build the app (first time)
 
 - **Windows**: double-click `build-windows.bat`. It installs Node.js / Rust if missing, builds the app, and places the installer + portable zip in `release/`.
 - **macOS**: run `build-macos.command` (right-click → Open the first time). It installs missing tools, builds the app, and places the .dmg / app zip / portable zip in `release/`. The macOS build is unsigned; on first launch use right-click → Open.
+- **Android**: run `build-android.sh` on a macOS/Linux machine with the Android SDK + NDK — see `ANDROID.md`. The Android app bundles its AI engines in the APK (no engine downloads) and does not offer telehealth system-audio recording.
 
 ## First run
 

@@ -5,5 +5,3 @@ dist/
 *.sqlite
 *.backup
 .env
-release/
-*.zip

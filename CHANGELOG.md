@@ -1,5 +1,12 @@
 # Changelog — Murmur
 
+## V1.4.0 — 2026-10-25 (Android)
+
+- **Android support (arm64)**: Murmur now builds for Android with the same encrypted database, accounts, audit log, bilingual UI, and offline AI. See `ANDROID.md`.
+- **Bundled engines on Android**: Android forbids executing downloaded binaries, so the transcription and note engines ship inside the APK as native libraries (`jniLibs` → the app's native library directory, which the backend now resolves on Android). `llama-cli` comes from the official llama.cpp Android release (pinned b11887); `whisper-cli` is cross-compiled from source with the NDK by `scripts/fetch-android-engines.sh`, since no official Android binary exists. Models still download over HTTPS as on desktop; engine downloads are disabled on Android with an explanation.
+- **Telehealth source is desktop-only**: Android has no WebView system-audio capture path, so the telehealth recording source is disabled in the Android UI with a note; microphone recording, audio import, and summary mode work as on desktop.
+- **Build tooling**: `build-android.sh` (toolchain checks, Tauri Android project generation, RECORD_AUDIO manifest patch, engine staging, signed/unsigned release APK) and this changelog discipline extended to the Android artifacts.
+
 ## V1.3.0 — 2026-10-25 (telehealth recording)
 
 - **Recording sources**: the AI Studio now offers *In-person · microphone* and *Telehealth · microphone + system audio*. Telehealth mode captures the system audio through screen sharing (share the entire screen, enable system audio) and mixes it with your microphone into the same local recording; the shared video is discarded immediately and never stored.

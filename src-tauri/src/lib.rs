@@ -210,17 +210,43 @@ fn find_exe(dir: &Path, names: &[&str]) -> Option<PathBuf> {
 }
 fn resolve_engine(state: &State<AppState>, engines: &Path, which: &str) -> Option<PathBuf> {
     let (pref_key, names): (&str, &[&str]) = if which == "whisper" {
-        ("aiWhisperPath", if cfg!(windows) { &["whisper-cli.exe", "main.exe"] } else { &["whisper-cli", "main"] })
+        ("aiWhisperPath", if cfg!(windows) { &["whisper-cli.exe", "main.exe"] } else if cfg!(target_os = "android") { &["libwhisper-cli.so", "whisper-cli", "main"] } else { &["whisper-cli", "main"] })
     } else {
-        ("aiLlamaPath", if cfg!(windows) { &["llama-cli.exe"] } else { &["llama-cli"] })
+        ("aiLlamaPath", if cfg!(windows) { &["llama-cli.exe"] } else if cfg!(target_os = "android") { &["libllama-cli.so", "llama-cli"] } else { &["llama-cli"] })
     };
     if let Some(p) = pref_value(state, pref_key) { let pb = PathBuf::from(p); if pb.exists() { return Some(pb); } }
     if let Some(p) = find_exe(&engines.join(which), names) { return Some(p); }
+    // Android: packaged engine executables live in the app's native library
+    // directory (installed from jniLibs as lib*.so — the only location Android
+    // allows executing binaries from). Files in the app-data engines folder
+    // are found by the scan above, but Android 10+ may refuse to execute
+    // them; the bundled copies below are the supported path.
+    if cfg!(target_os = "android") {
+        if let Some(dir) = android_native_lib_dir() {
+            let p = dir.join(names[0]);
+            if p.exists() { return Some(p); }
+        }
+    }
     let mut candidates: Vec<PathBuf> = vec![];
     if cfg!(target_os = "macos") { candidates.push(PathBuf::from("/opt/homebrew/bin").join(names[0])); candidates.push(PathBuf::from("/usr/local/bin").join(names[0])); }
     if let Ok(path_var) = std::env::var("PATH") { for part in path_var.split(if cfg!(windows) { ';' } else { ':' }) { if !part.is_empty() { candidates.push(PathBuf::from(part).join(names[0])); } } }
     candidates.into_iter().find(|p| p.exists())
 }
+#[cfg(target_os = "android")]
+fn android_native_lib_dir() -> Option<PathBuf> {
+    // Derive the app's nativeLibraryDir from our own loaded library mapping.
+    let maps = fs::read_to_string("/proc/self/maps").ok()?;
+    for line in maps.lines() {
+        if let Some(start) = line.find('/') {
+            let path = line[start..].trim();
+            if path.ends_with("libmurmur_lib.so") {
+                if let Some(parent) = PathBuf::from(path).parent() { return Some(parent.to_path_buf()); }
+            }
+        }
+    }
+    None
+}
+
 fn model_file(models: &Path, kind: &str, id: &str) -> Option<(String, PathBuf)> {
     if kind == "whisper" { WHISPER_MODELS.iter().find(|m| m.0 == id).map(|m| (m.2.to_string(), models.join(m.2))) }
     else { LLM_MODELS.iter().find(|m| m.0 == id).map(|m| (m.2.to_string(), models.join(m.2))) }
@@ -254,7 +280,7 @@ fn ai_status(state: State<AppState>, ai: State<AiState>) -> Result<Value, String
 fn ai_download(state: State<AppState>, ai: State<AiState>, what: String) -> Result<bool, String> {
     let (models, engines, _a) = ai_dirs(&state)?;
     let (url, dest, extract_to, label): (String, PathBuf, Option<PathBuf>, String) = if let Some(w) = what.strip_prefix("engine-") {
-        let url = engine_download_url(w).ok_or("No automatic engine package for this system. Set a custom engine path (on macOS, whisper-cpp / llama.cpp can be installed via Homebrew).")?;
+        let url = engine_download_url(w).ok_or(if cfg!(target_os = "android") { "Engines are bundled with the Android app and cannot be downloaded. Reinstall or update the app to change engines." } else { "No automatic engine package for this system. Set a custom engine path (on macOS, whisper-cpp / llama.cpp can be installed via Homebrew)." })?;
         (url.clone(), engines.join(format!("{}-engine.zip", w)), Some(engines.join(w)), format!("{} engine", w))
     } else if let Some(id) = what.strip_prefix("whisper-") {
         let (_f, p) = model_file(&models, "whisper", id).ok_or("Unknown model")?;

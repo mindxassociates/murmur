@@ -2,7 +2,7 @@
 
 *Progress notes that never leave the room.*
 
-**Version 1.3.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
+**Version 1.4.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
 
 Murmur turns therapy sessions into progress notes without anything leaving the computer it runs on. Record a session (with the client's consent) or type a brief summary, transcribe and draft locally, review and edit, then save — the only network use in the whole product is the one-time download of the speech and language models you choose.
 
@@ -73,9 +73,13 @@ Murmur is used with PHI in the US as well as internationally, and is built aroun
 ## Build
 See `START-HERE.md`. In short: `build-windows.bat` (Windows) or `build-macos.command` (macOS) installs missing toolchains and builds the installer + portable zip into `release/`. Frontend smoke test (no browser needed): install `jsdom` once (`npm i jsdom` in a scratch folder) and run `NODE_PATH=<that folder>/node_modules node scripts/smoke-test.cjs`.
 
+## Android
+
+Murmur also runs on Android (arm64). The Android build bundles the AI engines inside the APK — Android forbids running downloaded executables — so engines are built in rather than downloaded; models still download normally. Telehealth system-audio capture is desktop-only; on Android, use the microphone source. Build with `build-android.sh`; full details in `ANDROID.md`.
+
 ## Developer
 
 Murmur is developed by [Mind X Associates](https://mind.us) ([Mind X社区 — 中文](https://mind.us/zh)). The app itself carries the same credit in the sidebar; the link opens the developer site in your browser (the only external link the app allows).
 
 ## Version history
-See `CHANGELOG.md`. Current: **V1.3.0**.
+See `CHANGELOG.md`. Current: **V1.4.0**.
