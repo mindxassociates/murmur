@@ -75,7 +75,7 @@ See `START-HERE.md`. In short: `build-windows.bat` (Windows) or `build-macos.com
 
 ## Clinical language corpus
 
-Generated notes are phrased toward standard progress-note register (third person, past tense, clinical verbs) using a built-in corpus of phrasing patterns. Intervention language follows the modality named in the Orientation / style field, and corpus phrasing is used only where the session content supports it — never to add content. See `CORPUS.md`.
+Generated notes are phrased toward standard progress-note register (third person, past tense, clinical verbs) using a built-in corpus of phrasing patterns. Intervention language follows the modality named in the Orientation / style field, a problem-focused layer matches the session content to 11 problem frame sets (anxiety, depression, grief, OCD, panic, substance use, and more), and corpus phrasing is used only where the session content supports it — never to add content. The note editor's phrase library lets you insert any corpus phrase with one click, star favorites, and add your own phrases under **★ My phrases**; your saved phrases also steer generated notes toward your own wording. See `CORPUS.md`.
 
 ## Android
 

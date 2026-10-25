@@ -167,6 +167,40 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   $('aiOrientation').value = '';
   const defaultPrompt = w.buildNotePrompt('Client reported poor sleep and work stress.', 'brief');
   check('corpus: no orientation falls back to supportive frames', defaultPrompt.includes('unconditional positive regard'));
+
+  // Problem-focused corpus + My Phrases (V1.6.0)
+  check('matchProblems helper exists', typeof w.matchProblems === 'function');
+  check('matchProblems ranks by hit count and caps at 2', JSON.stringify(w.matchProblems('anxiety and worry and more worry, plus panic attacks')) === JSON.stringify(['anxiety', 'panic']));
+  const probPrompt = w.buildNotePrompt('Client described constant anxiety and worry at work, and a depressed mood with anhedonia lasting for weeks. We practiced breathing skills today.', 'brief');
+  check('problem focus: anxiety frames in prompt', probPrompt.includes('Problem focus') && probPrompt.includes('catastrophic predictions maintaining their anxiety'));
+  check('problem focus: depression frames in prompt', probPrompt.includes('behavioral activation, scheduling pleasant and mastery activities'));
+  check('problem focus: unrelated problems left out', !probPrompt.includes('exposure and response prevention principles') && !probPrompt.includes('anger triggers and early warning signs'));
+  check('problem focus sits inside corpus after modality frames, before response', probPrompt.indexOf('Problem focus') > probPrompt.indexOf('CLINICAL LANGUAGE CORPUS') && probPrompt.indexOf('Problem focus') < probPrompt.indexOf('Client response:'));
+  const calmPrompt = w.buildNotePrompt('Client talked about their week, weekend plans, and scheduling for next time.', 'brief');
+  check('no keyword hits: no Problem focus subsection', !calmPrompt.includes('Problem focus'));
+  w.openNote(); await tick();
+  check('phrase panel exists in note editor', !!$('phrasePanel'));
+  w.togglePhrasePanel();
+  check('phrase panel renders My phrases + standard + problem groups', $('phrasePanel').innerHTML.includes('My phrases') && $('phrasePanel').innerHTML.includes('Socratic questioning') && $('phrasePanel').innerHTML.includes('catastrophic predictions maintaining their anxiety'));
+  const RELAX = 'Therapist taught the client relaxation and breathing skills to reduce physiological arousal when anxiety escalates.';
+  const starBtn = [...w.document.querySelectorAll('#phrasePanel [data-act="star"]')].find(b => b.getAttribute('data-phrase') === RELAX);
+  check('star toggle rendered for a corpus phrase', !!starBtn);
+  starBtn.click(); await flush();
+  check('starring persists phrase to corpusFavorites pref', (JSON.parse(w.desktopDB.getPref('corpusFavorites') || '[]')).includes(RELAX));
+  check('favorite appears in My phrases section', $('myPhraseList').innerHTML.includes('relaxation and breathing skills'));
+  $('customPhraseInput').value = 'Client smiled for the first time in several weeks.';
+  w.addCustomPhrase(); await flush();
+  check('custom phrase persists to corpusCustomPhrases pref', (JSON.parse(w.desktopDB.getPref('corpusCustomPhrases') || '[]')).includes('Client smiled for the first time in several weeks.'));
+  check('custom phrase appears in My phrases section', $('myPhraseList').innerHTML.includes('Client smiled for the first time'));
+  const minePrompt = w.buildNotePrompt('Client reported poor sleep and work stress.', 'brief');
+  check('prompt carries preferred-phrasing subsection with favorite + custom', minePrompt.includes("Therapist's own preferred phrasing") && minePrompt.includes('relaxation and breathing skills') && minePrompt.includes('Client smiled for the first time in several weeks.'));
+  check('preferred phrasing after corpus, before custom template', minePrompt.indexOf("Therapist's own preferred phrasing") > minePrompt.indexOf('CLINICAL LANGUAGE CORPUS') && minePrompt.indexOf("Therapist's own preferred phrasing") < minePrompt.indexOf('CUSTOM TEMPLATE'));
+  const subjTa = w.document.querySelector('textarea[data-seckey="subjective"]');
+  subjTa.focus();
+  const chip = [...w.document.querySelectorAll('#phrasePanel [data-act="insert"]')].find(b => b.getAttribute('data-phrase') === RELAX);
+  chip.click(); await tick();
+  check('phrase click inserts into the focused note textarea', subjTa.value.includes('relaxation and breathing skills to reduce physiological arousal'));
+  check('i18n dictionaries keep EN/ZH key parity', JSON.stringify(Object.keys(w.eval('I18N.en')).sort()) === JSON.stringify(Object.keys(w.eval('I18N.zh')).sort()));
   $('aiOrientation').value = '';
   await w.aiPollOnce(); await w.aiPollOnce();
   const subj = w.document.querySelector('textarea[data-seckey="subjective"]');
@@ -274,7 +308,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   // Standing rules: no third-party product names in the UI, no localStorage business data
   check('no borrowed-product names appear in UI/docs strings', !new RegExp(['Confi','dant'].join('') + '|' + ['Open','Evidence'].join(''), 'i').test(html));
   check('no localStorage used', !/localStorage/.test(html));
-  check('version V1.5.0 in UI', html.includes('Desktop V1.5.0'));
+  check('version V1.6.0 in UI', html.includes('Desktop V1.6.0'));
 
   // Delete flows
   const noteId = savedState().sessions[0].id;

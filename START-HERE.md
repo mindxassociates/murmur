@@ -1,4 +1,4 @@
-# Start Here — Murmur V1.5.0
+# Start Here — Murmur V1.6.0
 
 ## Build the app (first time)
 
@@ -20,6 +20,7 @@ Everything after the model downloads works fully offline.
 
 - **Output language** is independent of the session language — e.g. hold the session in Spanish, write the note in English.
 - **Custom template / instructions**: paste your own template once; it is remembered and takes priority over the preset formats.
+- **Phrase library / My phrases**: in the note editor, open the phrase library to insert standard corpus phrasing (including problem-focused sets) with one click. Star (☆) the phrases you use most, or add your own — they stay pinned under **★ My phrases**, and generated notes prefer them where they fit.
 - Tick **Delete transcript after the note is saved** if you want the working text wiped as soon as the note is stored.
 
 ## Run the frontend smoke test (developers)

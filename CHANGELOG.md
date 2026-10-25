@@ -1,5 +1,12 @@
 # Changelog — Murmur
 
+## V1.6.0 — 2026-10-25 (problem-focused corpus + My Phrases)
+
+- **Problem-focused corpus**: on top of the modality layer, the corpus now carries 11 problem-focused frame sets (anxiety, depression, anger, grief & loss, OCD, relationship conflict, self-esteem, family conflict, parenting, panic & phobias, substance use — 4 frames each). During generation, the session source (transcript or brief summary) is keyword-matched and the top two matching problems add a "Problem focus" subsection to the prompt, so phrasing follows what the session was actually about. No keyword hits → no problem subsection.
+- **My phrases**: the note editor gains a collapsible **Phrase library** panel with every corpus group (standard sections, modality sets, and all 11 problem sets). Any phrase can be starred (☆/★) into a pinned **★ My phrases** section, and you can add your own custom phrases (and delete them). Favorites and custom phrases are stored per user on this device.
+- **Your phrasing steers generation**: when favorites or custom phrases exist, the generation prompt appends a "Therapist's own preferred phrasing" subsection (favorites first, then custom, up to 30), so drafted notes prefer your wording where it fits the content. The clinician's custom template remains the highest-priority instruction.
+- Fully bilingual for the new controls (EN / 中文）, on desktop and Android alike.
+
 ## V1.5.0 — 2026-10-25 (clinical language corpus)
 
 - **Built-in clinical language corpus**: Murmur now carries a corpus of standard progress-note phrasing patterns (58 frames across presentation, assessment/progress, general interventions, per-modality interventions, client response, and plan), distilled from professional documentation references. See `CORPUS.md`.
