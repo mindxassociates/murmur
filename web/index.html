@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Murmur</title>
+<style>
+:root{--nav:#132228;--ink:#20313d;--muted:#71808b;--line:#e3e9ed;--bg:#f5f7f8;--card:#fff;--accent:#4a778b;--accent2:#e2e9ec;--soft:#eef3f5;--danger:#a04444;--shadow:0 10px 30px rgba(31,49,61,.06);--radius:16px}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink)}
+header{height:68px;background-image:radial-gradient(620px 220px at 88% -50%,rgba(255,255,255,.20),transparent 60%),radial-gradient(520px 200px at 8% 130%,rgba(126,184,199,.28),transparent 62%),linear-gradient(125deg,#132228 0%,#24414e 42%,#355564 74%,#4a778b 100%);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:20}
+header h1{margin:0;font-size:18px;font-weight:750}header small{display:block;margin-top:2px;opacity:.62;font-size:11px}#saveStatus{font-size:12px;opacity:.75}
+.shell{display:block;min-height:calc(100vh - 68px)}
+nav{background:var(--card);border-right:1px solid var(--line);padding:18px 12px;position:fixed;left:0;top:68px;bottom:0;width:220px;overflow-y:auto;z-index:15}
+nav button{width:100%;text-align:left;border:0;background:transparent;color:var(--ink);padding:10px 12px;border-radius:10px;cursor:pointer;margin:2px 0;font-size:13px}
+nav button:hover{background:var(--soft)}nav button.active{background:var(--accent2);color:var(--accent);font-weight:750}
+.nav-version{margin-top:18px;padding:12px 10px 4px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);line-height:1.7}
+main{padding:30px 34px 54px;margin-left:220px;min-width:0}
+.view{display:none}.view.active{display:block}
+h2{font-size:24px;margin:0 0 5px}h3{font-size:15px;margin:4px 0 12px}.muted{color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin:16px 0;box-shadow:var(--shadow)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.between{justify-content:space-between}.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+input,textarea,select{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card);color:var(--ink);font:inherit;outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(74,119,139,.12)}textarea{min-height:90px;resize:vertical}
+label{display:block;font-size:11px;font-weight:750;color:var(--muted);margin:12px 0 6px}label.inline{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ink);font-weight:600;margin:6px 0}
+label.inline input{width:auto}
+.primary,.secondary,.danger{border:0;border-radius:10px;padding:9px 14px;font-weight:700;cursor:pointer}
+.primary{background:var(--accent);color:#fff}.secondary{background:var(--soft);color:var(--ink)}.danger{background:#f7e8e8;color:#8b3030}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 9px;border-bottom:1px solid var(--line);font-size:13px}th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.action{color:var(--accent);cursor:pointer;font-weight:650}.action:hover{text-decoration:underline}
+.pill{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:10px;background:var(--soft);color:var(--muted)}
+.empty{text-align:center;color:var(--muted);padding:34px 20px;font-size:13px}
+.notice{background:#fff8df;border:1px solid #eadca7;border-radius:10px;padding:12px;font-size:12px;color:#655c3c;line-height:1.7}
+dialog{border:0;border-radius:18px;max-width:640px;width:calc(100% - 32px);padding:0;background:var(--card);color:var(--ink);box-shadow:0 28px 90px rgba(0,0,0,.25)}dialog .inner{padding:24px}
+.lock-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;align-items:center;justify-content:center;padding:20px}.lock-screen.show{display:flex}
+.lock-box{width:min(420px,100%);background:var(--card);border:1px solid var(--line);border-radius:20px;padding:28px;box-shadow:var(--shadow)}
+.password-wrap{position:relative}.password-wrap input{padding-right:44px}.password-eye{position:absolute;right:5px;top:5px;width:34px;height:34px;border:0;background:transparent;color:var(--muted);font-size:18px;cursor:pointer}
+#toastBox{position:fixed;right:22px;bottom:22px;background:#24414e;color:#fff;padding:11px 15px;border-radius:10px;display:none;z-index:40;font-size:12px}
+#printArea{display:none}
+.consent-doc{line-height:1.85;font-size:14px}.consent-doc h3{text-align:center;font-size:17px}.sig{margin-top:26px}.sig span{display:inline-block;border-bottom:1px solid #888;min-width:220px;margin:0 8px}
+@media(max-width:720px){nav{position:relative;top:auto;width:100%;border-right:0;border-bottom:1px solid var(--line)}main{margin-left:0;padding:20px 15px}.two{grid-template-columns:1fr}header{padding:0 16px}}
+@media print{body.has-print>header,body.has-print>.shell,body.has-print>#lockScreen,body.has-print>#toastBox{display:none!important}#printArea{display:block!important;color:#000}}
+</style>
+</head>
+<body>
+<header><div><h1>Murmur</h1><small data-i="tagline">Progress notes that never leave the room</small></div><div class="row"><span id="saveStatus" data-i="savedLocally">Saved locally</span><button class="secondary" id="uiLangBtn" onclick="toggleUiLang()">中文</button><button class="secondary" onclick="lockWorkspace()" data-i="lock">Lock</button></div></header>
+<div class="shell">
+<nav>
+<button data-view="clients" class="active" data-i="navClients">Clients</button>
+<button data-view="studio" data-i="navStudio">AI Studio</button>
+<button data-view="notes" data-i="navNotes">Notes</button>
+<button data-view="consent" data-i="navConsent">Recording Consent</button>
+<button data-view="models" data-i="navModels">Models &amp; Settings</button>
+<div class="nav-version">Murmur<br>Desktop V1.3.0</div>
+<div class="nav-dev" style="margin-top:10px;font-size:12px"><span data-i="developedBy">Developed by</span> <a href="https://mind.us" id="devLink" onclick="return openDevSite(event)">Mind X Associates</a></div>
+</nav>
+<main>
+
+<section id="clients" class="view active">
+<div class="between row"><div><h2 data-i="clientsTitle">Clients</h2><div class="muted" data-i="clientsSub">A simple local client list. Notes you save are tied to a client.</div></div><button class="primary" onclick="openClient()" data-i="addClient">+ Add client</button></div>
+<div class="card"><input id="clientFilter" data-i-ph="clientSearchPh" placeholder="Search by name or note…" oninput="renderClients()"><div id="clientsTable"></div></div>
+</section>
+
+<section id="studio" class="view">
+<div class="between row"><div><h2 data-i="studioTitle">AI Studio</h2><div class="muted" data-i="studioSub">Record a session (with consent) or type a brief summary — transcription and note drafting happen entirely on this device. Drafts are never saved automatically; review and edit first.</div></div></div>
+<div class="card"><h3 data-i="genSettings">Generation settings</h3><div class="row">
+<div style="flex:1;min-width:180px"><label data-i="client">Client</label><select id="aiClient"></select></div>
+<div><label data-i="date">Session date</label><input id="aiDate" type="date"></div>
+<div style="flex:1;min-width:160px"><label data-i="llmModel">Note model (LLM)</label><select id="aiLlmModel"></select></div>
+<div><label data-i="format">Note format</label><select id="aiFormat"></select></div>
+<div><label data-i="outLang">Output language</label><select id="aiOutLang"></select></div>
+</div>
+<div class="row"><div style="flex:2;min-width:220px"><label data-i="orientation">Orientation / style (optional)</label><input id="aiOrientation" data-i-ph="orientationPh" placeholder="e.g. CBT, person-centered, concise and objective…"></div></div>
+<label data-i="customTpl">Custom template / instructions (optional)</label>
+<textarea id="aiCustomTemplate" rows="5" data-i-ph="customTplPh" placeholder="Type or paste your own note template or instructions here — for example the sections you always want, wording you prefer, or things to always include or avoid. If this conflicts with the preset format above, your template wins. It is saved on this device and applies to both recording and summary generation."></textarea>
+<div class="muted" id="aiCustomTplStatus" style="font-size:11px"></div>
+<p class="muted" id="aiEngineStatus" data-i="enginesChecking">Engines: checking…</p>
+</div>
+
+<div class="card"><h3 data-i="mode1">Mode 1 · Ambient recording → transcript</h3>
+<div class="row" style="margin-bottom:6px">
+<div><label data-i="recSource">Recording source</label><select id="aiRecSource" onchange="onRecSourceChange()"><option value="mic" data-i="srcMic">In-person · microphone</option><option value="tele" data-i="srcTele">Telehealth · microphone + system audio</option></select></div>
+<div style="flex:1;min-width:200px"><label data-i="audioDevice">Audio input device</label><select id="aiAudioDevice" onchange="onAudioDeviceChange()"></select></div>
+<button class="secondary" onclick="refreshAudioDevices(true)" data-i="refreshDevices">Refresh devices</button>
+</div>
+<p class="muted" id="aiRecHint" style="margin:0 0 8px"></p>
+<label class="inline"><input type="checkbox" id="aiConsent"> <span data-i="consentChk">I have told the client and obtained their consent to record (recording and transcription stay on this device)</span></label>
+<div class="row" style="margin:10px 0">
+<button class="primary" id="aiRecBtn" onclick="startRecording()" data-i="recStart">Start recording</button>
+<button class="secondary" id="aiRecStopBtn" onclick="stopRecording()" disabled data-i="recStop">Stop</button>
+<span id="aiRecTime" class="muted">00:00</span><span class="muted" data-i="orWord">or</span>
+<button class="secondary" onclick="document.getElementById('aiAudioFile').click()" data-i="importAudio">Import audio file</button>
+<input type="file" id="aiAudioFile" accept="audio/*" style="display:none" onchange="importAudioFile(this)">
+<span id="aiAudioInfo" class="muted" data-i="noAudioYet">No audio yet</span>
+</div>
+<div class="row">
+<div><label data-i="whisperModel">Transcription model (Whisper)</label><select id="aiWhisperModel"></select></div>
+<div style="flex:1;min-width:170px"><label data-i="transLang">Transcription language</label><select id="aiLang"></select></div>
+<button class="primary" onclick="startTranscribe()" data-i="transcribe">Transcribe</button>
+<button class="secondary" onclick="aiCancelProc()" data-i="cancel">Cancel</button>
+<label class="inline"><input type="checkbox" id="aiDelAudio" checked> <span data-i="delAudio">Delete recording after transcription</span></label>
+<label class="inline"><input type="checkbox" id="aiDelTranscript"> <span data-i="delTranscript">Delete transcript after the note is saved</span></label>
+</div>
+<div id="aiProcWrap" style="display:none;margin-top:10px"><div class="muted" id="aiProcLabel" data-i="working">Working…</div><div style="height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin:6px 0"><div id="aiProcBar" style="height:100%;background:var(--accent);width:5%"></div></div></div>
+<label data-i="transcript">Transcript (editable)</label>
+<div class="row" style="margin:6px 0">
+<button class="secondary" onclick="insertSpeakerMarker('Therapist')" data-i="therapistBtn">+ Therapist:</button>
+<button class="secondary" onclick="insertSpeakerMarker('Client')" data-i="clientBtn">+ Client:</button>
+<button class="secondary" onclick="relabelCurrentLine()" data-i="relabel">Relabel current line</button>
+<button class="secondary" onclick="autoSegmentTranscript()" data-i="autoSeg">Auto-segment speakers</button>
+</div>
+<textarea id="aiTranscript" rows="9" data-i-ph="transcriptPh" placeholder="The transcript will appear here. You can also paste a transcript from elsewhere."></textarea>
+<div class="row" style="margin-top:8px"><button class="primary" onclick="generateNote('transcript')" data-i="genFromTranscript">Generate note draft from transcript</button></div>
+</div>
+
+<div class="card"><h3 data-i="mode2">Mode 2 · Brief summary → note</h3>
+<label data-i="briefLabel">Brief summary (a few sentences: theme, key content, client state, plan)</label>
+<textarea id="aiBrief" rows="5" data-i-ph="briefPh" placeholder="e.g. Client reported work stress and two weeks of poor sleep; discussed sleep hygiene and boundaries; calmer than last session; agreed a wind-down routine, review next week."></textarea>
+<div class="row" style="margin-top:8px"><button class="primary" onclick="generateNote('brief')" data-i="genFromBrief">Generate note draft from summary</button></div>
+</div>
+</section>
+
+<section id="notes" class="view">
+<div class="between row"><div><h2 data-i="notesTitle">Notes</h2><div class="muted" data-i="notesSub">Saved progress notes, stored only in the local encrypted database.</div></div><button class="primary" onclick="openNote()" data-i="newNote">+ New note</button></div>
+<div class="card"><div class="row"><select id="notesFilterClient" style="width:auto" onchange="renderNotes()"><option value="" data-i="allClients">All clients</option></select><input id="notesSearch" data-i-ph="notesSearchPh" placeholder="Search notes…" style="flex:1" oninput="renderNotes()"></div><div id="notesList"></div></div>
+<div class="card" id="noteEditorWrap" style="display:none"><h3 id="noteEditorTitle">Note</h3>
+<input type="hidden" id="nId">
+<div class="row"><div style="flex:1;min-width:170px"><label data-i="client">Client</label><select id="nClient"></select></div>
+<div><label data-i="date">Date</label><input id="nDate" type="date"></div>
+<div><label data-i="format">Format</label><select id="nFormat" onchange="changeNoteFormat()"></select></div>
+<div><label data-i="outLang">Output language</label><select id="nOutLang"></select></div></div>
+<div id="nSections"></div>
+<div class="row" style="margin-top:12px"><button class="primary" onclick="saveNote()" data-i="saveNote">Save note</button>
+<button class="secondary" onclick="copyNoteText()" data-i="copyNote">Copy</button>
+<button class="secondary" onclick="exportNoteText()" data-i="exportNote">Export .txt</button>
+<button class="secondary" onclick="printCurrentNote()" data-i="printNote">Print / PDF</button>
+<button class="danger" id="nDeleteBtn" onclick="deleteCurrentNote()" data-i="deleteNote">Delete</button>
+<button class="secondary" onclick="closeNoteEditor()" data-i="close">Close</button></div>
+</div>
+</section>
+
+<section id="consent" class="view">
+<div class="between row"><div><h2 data-i="consentTitle">Informed Consent for Recording</h2><div class="muted" data-i="consentSub">Print this form and have the client sign before any recording.</div></div>
+<div class="row"><div class="row"><button class="secondary" id="consentEnBtn" onclick="setConsentLang('en')">English</button><button class="secondary" id="consentZhBtn" onclick="setConsentLang('zh')">中文</button></div><button class="primary" onclick="printConsent()" data-i="printForm">Print form</button></div></div>
+<div class="card"><div id="consentBody"></div></div>
+</section>
+
+<section id="models" class="view">
+<h2 data-i="modelsTitle">Models &amp; Settings</h2>
+<div id="modelsBody"></div>
+<div class="card"><h3 data-i="practiceSettings">Practice settings</h3>
+<div class="two"><div><label data-i="practitioner">Practitioner name</label><input id="setPractitioner"></div>
+<div><label data-i="practice">Practice name</label><input id="setPractice"></div></div>
+<label data-i="defOrientation">Default orientation / style for generated notes</label><input id="setOrientation">
+<div class="row" style="margin-top:12px"><button class="primary" onclick="savePracticeSettings()" data-i="saveSettings">Save settings</button>
+<button class="secondary" onclick="desktopBackup()" data-i="backupNow">Back up database now</button>
+<button class="secondary" onclick="openDataFolder()" data-i="openData">Open data folder</button></div>
+<p id="storageInfo" class="muted"></p>
+</div>
+<div class="card"><h3 data-i="securityTitle">Security &amp; HIPAA safeguards</h3>
+<p class="muted" data-i="securityIntro">Murmur is built to support your HIPAA compliance program: client data is encrypted on this device (SQLCipher / AES-256), never transmitted anywhere, access requires a personal account, and sign-ins and changes are recorded in a tamper-evident audit log. The project folder's HIPAA.md maps each safeguard and lists the organizational steps (policies, risk analysis, workforce training) that remain yours.</p>
+<label data-i="autoLockLabel">Automatic lock after inactivity</label>
+<select id="autoLockSel" onchange="setAutoLock(this.value)"><option value="0" data-i="lockOff">Off (not recommended)</option><option value="5" data-i="lock5">5 minutes</option><option value="10" data-i="lock10">10 minutes (recommended)</option><option value="15" data-i="lock15">15 minutes</option><option value="30" data-i="lock30">30 minutes</option></select>
+<h4 style="margin-top:18px" data-i="usersTitle">User accounts</h4>
+<div id="usersPanel"><div class="muted" data-i="loadingTxt">Loading…</div></div>
+<h4 style="margin-top:18px" data-i="changePwTitle">Change your password</h4>
+<div class="two"><div><label data-i="curPw">Current password</label><input id="pwCurrent" type="password" autocomplete="current-password"></div><div><label data-i="newPw">New password (at least 10 characters)</label><input id="pwNew" type="password" autocomplete="new-password"></div></div>
+<div class="row" style="margin-top:8px"><button class="secondary" onclick="submitChangePassword()" data-i="changePwBtn">Change password</button></div>
+<h4 style="margin-top:18px" data-i="auditTitle">Audit log</h4>
+<div class="row"><button class="secondary" onclick="loadAuditLog()" data-i="auditView">View recent entries</button><button class="secondary" onclick="verifyAuditLog()" data-i="auditVerifyBtn">Verify log integrity</button><span id="auditStatus" class="muted"></span></div>
+<div id="auditWrap" style="margin-top:8px"></div>
+</div>
+</section>
+
+</main></div>
+<div id="printArea"></div>
+
+<dialog id="clientDialog"><div class="inner"><h3 id="clientDialogTitle">Client</h3><input type="hidden" id="cId">
+<label data-i="cName">Name / initials</label><input id="cName" data-i-ph="cNamePh" placeholder="Use initials or a code name if you prefer">
+<div class="two"><div><label data-i="dob">Date of birth</label><input id="cDob" type="date"></div>
+<div><label data-i="cStatus">Status</label><select id="cStatus"><option value="Active" data-i="statusActive">Active</option><option value="Inactive" data-i="statusInactive">Inactive</option><option value="Archived" data-i="statusArchived">Archived</option></select></div></div>
+<label data-i="cContact">Contact (optional, stored locally only)</label><input id="cContact">
+<label data-i="cNotes">Notes</label><textarea id="cNotes" rows="3"></textarea>
+<div class="row" style="margin-top:14px"><button class="primary" onclick="saveClient()" data-i="save">Save</button><button class="secondary" onclick="clientDialog.close()" data-i="close">Close</button><button class="danger" id="cDeleteBtn" onclick="deleteClientFromDialog()" data-i="deleteTxt">Delete</button></div>
+</div></dialog>
+
+<div id="lockScreen" class="lock-screen show"><div class="lock-box"><h2 id="lockTitle">Sign in</h2><p id="lockHelp" class="muted">Sign in with your local account. 首次使用请先创建账户。</p>
+<div id="setupFields" style="display:none"><label data-i="username">Username</label><input id="setupUsername" autocomplete="username"><label data-i="displayName">Display name</label><input id="setupDisplayName"><label data-i="setPassword">Set password (at least 10 characters)</label><div class="password-wrap"><input id="setupPassword" type="password" autocomplete="new-password"><button type="button" class="password-eye" onclick="togglePassword('setupPassword')">◉</button></div><label data-i="repeatPassword">Repeat password</label><div class="password-wrap"><input id="setupPassword2" type="password" autocomplete="new-password"><button type="button" class="password-eye" onclick="togglePassword('setupPassword2')">◉</button></div><button id="setupAdminButton" type="button" class="primary" style="margin-top:12px" data-i="createAccount">Create account</button></div>
+<div id="loginFields"><label data-i="username">Username</label><input id="loginUsername" autocomplete="username"><label data-i="passwordLbl">Password</label><div class="password-wrap"><input id="unlockPassword" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')unlockWorkspace()"><button type="button" class="password-eye" onclick="togglePassword('unlockPassword')">◉</button></div><div class="row" style="margin-top:12px"><button id="loginButton" type="button" class="primary" data-i="signInBtn">Sign in</button></div></div>
+<p id="unlockError" class="muted"></p></div></div>
+<div id="toastBox"></div>
+<script>
+
+/* Tauri 2 runtime compatibility bridge (V3.0.2) */
+(function () {
+  function resolveInvoke() {
+    if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+      return window.__TAURI__.core.invoke.bind(window.__TAURI__.core);
+    }
+    if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+      return window.__TAURI_INTERNALS__.invoke.bind(window.__TAURI_INTERNALS__);
+    }
+    return null;
+  }
+
+  const invoke = resolveInvoke();
+  window.__OFFLINE_NOTES_TAURI_INVOKE__ = invoke;
+  let stateCache = null;
+  const prefCache = new Map();
+  let writeQueue = Promise.resolve();
+
+  function visibleRuntimeError(message) {
+    console.error(message);
+    const show = () => {
+      const el = document.getElementById('unlockError');
+      if (el) {
+        el.textContent = message;
+        el.style.color = '#b42318';
+      }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show, { once: true });
+    else show();
+  }
+
+  if (!invoke) {
+    visibleRuntimeError('桌面后端连接失败：未检测到 Tauri API。请确认使用的是最新重新构建并安装的桌面版。');
+    window.desktopDB = null;
+    return;
+  }
+
+  const reportWriteError = (e) => {
+    // Preference writes are non-critical: log + status line only.
+    // Business-data writes go through persistWorkspace(), which alerts.
+    console.error('本地数据库保存失败', e);
+    try {
+      const status = document.getElementById('saveStatus');
+      if (status) status.textContent = '保存失败';
+    } catch (_) {}
+  };
+  const queueWrite = (fn) => {
+    const pending = writeQueue.then(fn, fn);
+    writeQueue = pending.catch(() => {});
+    return pending;
+  };
+  const hydrate = async () => {
+    stateCache = await invoke('db_get_state');
+    try {
+      const all = await invoke('db_list_prefs');
+      if (all && typeof all === 'object') Object.entries(all).forEach(([k, v]) => prefCache.set(k, v));
+    } catch (_) {
+      const common = ['aiCustomTemplate', 'uiLang'];
+      await Promise.all(common.map(async key => {
+        try { prefCache.set(key, await invoke('db_get_pref', { key })); } catch (_) {}
+      }));
+    }
+  };
+
+  window.desktopDB = {
+    async startupStatus() { return invoke('startup_status'); },
+    async authStatus() { return invoke('auth_status'); },
+    async authSetup(input) {
+      const r = await invoke('startup_setup', { input });
+      if (r && r.ok) await hydrate();
+      return r;
+    },
+    async authLogin(input) {
+      const r = await invoke('startup_login', { input });
+      if (r && r.ok) await hydrate();
+      return r;
+    },
+    async authLock() {
+      await writeQueue;
+      stateCache = null; prefCache.clear();
+      return invoke('auth_lock');
+    },
+    getState() { return stateCache; },
+    setState(json) {
+      stateCache = json;
+      const pending = queueWrite(() => invoke('db_set_state', { json }));
+      pending.catch((e) => { console.error('本地数据库保存失败', e); });
+      return pending;
+    },
+    getPref(key) { return prefCache.has(key) ? prefCache.get(key) : null; },
+    setPref(key, val) {
+      const value = String(val);
+      prefCache.set(key, value);
+      return queueWrite(() => invoke('db_set_pref', { key, val: value })).catch(reportWriteError);
+    },
+    removePref(key) {
+      prefCache.delete(key);
+      return queueWrite(() => invoke('db_remove_pref', { key })).catch(reportWriteError);
+    },
+    async info() { await writeQueue; return invoke('db_info'); },
+    async backup() { await writeQueue; return invoke('db_backup'); },
+    async auditList(limit) { await writeQueue; return invoke('audit_list', { limit }); },
+    async auditVerify() { await writeQueue; return invoke('audit_verify'); },
+    async auditEvent(input) { await writeQueue; return invoke('audit_event', { input }); },
+    async usersList() { return invoke('users_list'); },
+    async usersCreate(input) { return invoke('users_create', { input }); },
+    async usersSetActive(input) { return invoke('users_set_active', { input }); },
+    async changePassword(input) { await writeQueue; return invoke('change_password', { input }); },
+    async openDataFolder() { return invoke('open_path', { kind: 'data' }); },
+    async openBackupFolder() { return invoke('open_path', { kind: 'backup' }); },
+    async openExternal(url) { return invoke('open_external', { url }); },
+    async aiStatus() { return invoke('ai_status'); },
+    async aiDownload(what) { return invoke('ai_download', { what }); },
+    async aiDownloadCancel() { return invoke('ai_download_cancel'); },
+    async aiSetEnginePath(which, path) { return invoke('ai_set_engine_path', { which, path }); },
+    async aiImportModel(kind, src) { return invoke('ai_import_model', { kind, src }); },
+    async audioBegin() { return invoke('audio_begin'); },
+    async audioAppend(id, data) { return invoke('audio_append', { id, data }); },
+    async audioFinish(id) { return invoke('audio_finish', { id }); },
+    async audioDiscard(path) { return invoke('audio_discard', { path }); },
+    async transcribeStart(audioPath, model, lang) { return invoke('transcribe_start', { audioPath, model, lang }); },
+    async generateStart(model, prompt) { return invoke('generate_start', { model, prompt }); },
+    async aiProcPoll() { return invoke('ai_proc_poll'); },
+    async aiProcCancel() { return invoke('ai_proc_cancel'); },
+    async flush() { await writeQueue; return true; },
+    async _hydrate() { await hydrate(); }
+  };
+})();
+</script>
+<script>
+
+// ================= Murmur — main app =================
+document.querySelectorAll('[id]').forEach(el=>{if(el.id&&typeof window[el.id]!=='function')window[el.id]=el});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=> 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,9);
+const todayLocal=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+function toast(msg){toastBox.textContent=msg;toastBox.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>toastBox.style.display='none',2600)}
+function togglePassword(id){const el=document.getElementById(id);el.type=el.type==='password'?'text':'password'}
+
+// The Rust backend stores a fixed workspace shape (SQLCipher). Saved progress
+// notes live in `sessions`; every other collection is kept present but unused
+// by this lean UI, so the backend snapshot validation keeps passing.
+const blank=()=>({schemaVersion:1,clients:[],sessions:[],events:[],quickNotes:[],goals:[],tasks:[],finance:[],templates:[],referrals:[],assessments:[],waitlist:[],recent:[],settings:{practitioner:'',practice:'',orientation:'',themeColor:'#4a778b'}});
+let db=blank(),currentAuthUser=null;
+function load(){try{const raw=window.desktopDB?window.desktopDB.getState():null;const x=raw?JSON.parse(raw):null;if(!x)return blank();return {...blank(),...x,settings:{...blank().settings,...(x.settings||{})}}}catch(e){return blank()}}
+async function persistWorkspace(){if(!window.desktopDB){saveStatus.textContent=t('saveFailed');return false}saveStatus.textContent=t('saving');try{await window.desktopDB.setState(JSON.stringify(db));saveStatus.textContent=t('savedLocally');return true}catch(e){console.error(e);saveStatus.textContent=t('saveFailed');alert(t('couldNotSave')+(e&&e.message||e));return false}}
+async function saveAll(){await persistWorkspace();renderAll()}
+function clientName(id){const c=db.clients.find(x=>x.id===id);return c?c.name:t('noClient')}
+function renderAll(){renderClients();refreshClientSelects();renderNotes()}
+
+// ---------- auth (same flow as the backend expects) ----------
+async function initAuth(){unlockError.textContent='';uiLang=detectUiLang();if(!window.desktopDB){unlockError.textContent=t('noBackend');unlockError.style.color='#b42318';applyUiLang();lockScreen.classList.add('show');return}let st;try{st=await window.desktopDB.startupStatus()}catch(e){unlockError.textContent=t('backendFailPrefix')+(e&&e.message||e);unlockError.style.color='#b42318';applyUiLang();lockScreen.classList.add('show');return}if(st.authenticated&&st.user){currentAuthUser=st.user;return afterLogin()}if(st.needsSetup){lockMode='setup';setupFields.style.display='block';loginFields.style.display='none'}else{lockMode='login';setupFields.style.display='none';loginFields.style.display='block'}applyUiLang();lockScreen.classList.add('show')}
+async function setupFirstUser(){const btn=document.getElementById('setupAdminButton');unlockError.textContent='';unlockError.style.color='';if(!window.desktopDB){unlockError.textContent='No desktop backend.';return}const u=setupUsername.value.trim(),d=setupDisplayName.value.trim(),a=setupPassword.value,b=setupPassword2.value;if(a!==b){unlockError.textContent=t('pwMismatch');return}if(!u){unlockError.textContent=t('enterUsername');return}if(a.length<10){unlockError.textContent=t('pwTooShort');return}try{if(btn){btn.disabled=true;btn.textContent=t('creating')}const r=await window.desktopDB.authSetup({username:u,displayName:d,password:a});if(!r||!r.ok){unlockError.textContent=(r&&r.error)||t('createFailed');return}currentAuthUser=r.user;await afterLogin()}catch(e){unlockError.textContent=t('createFailedPrefix')+(e&&e.message||e)}finally{if(btn){btn.disabled=false;btn.textContent=t('createAccount')}}}
+async function unlockWorkspace(){unlockError.textContent='';try{const r=await window.desktopDB.authLogin({username:loginUsername.value.trim(),password:unlockPassword.value});if(r.ok){currentAuthUser=r.user;await afterLogin()}else{unlockError.textContent=r.error||t('signInFailed');unlockPassword.select()}}catch(e){unlockError.textContent=t('signInFailedPrefix')+(e&&e.message||e);unlockPassword.select()}}
+async function lockWorkspace(){if(!currentAuthUser)return initAuth();await window.desktopDB.authLock();currentAuthUser=null;db=blank();lockMode='locked';refreshLockTexts();setupFields.style.display='none';loginFields.style.display='block';unlockPassword.value='';unlockError.textContent='';lockScreen.classList.add('show')}
+async function afterLogin(){db=load();lockScreen.classList.remove('show');applyUiLang();buildStudioControls();renderAll();aiDate.value=todayLocal();nDate.value=todayLocal();setPractitioner.value=db.settings.practitioner||'';setPractice.value=db.settings.practice||'';setOrientation.value=db.settings.orientation||'';consentLang=uiLang;renderConsent();refreshAiStatus();storage()}
+
+// ---------- navigation ----------
+function showView(name){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===name));document.querySelectorAll('nav button[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===name));if(name==='studio')refreshAiStatus();if(name==='models'){renderModels();storage();renderSecurity()}if(name==='notes')renderNotes();if(name==='consent')renderConsent();if(name==='clients')renderClients()}
+document.querySelectorAll('nav button[data-view]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
+
+// ---------- UI language: auto-detect (saved choice > system language > English), EN / 中文 ----------
+const I18N={
+en:{tagline:'Progress notes that never leave the room',lock:'Lock',navClients:'Clients',navStudio:'AI Studio',navNotes:'Notes',navConsent:'Recording Consent',navModels:'Models & Settings',developedBy:'Developed by',savedLocally:'Saved locally',saving:'Saving…',saveFailed:'Save failed',clientsTitle:'Clients',clientsSub:'A simple local client list. Notes you save are tied to a client.',addClient:'+ Add client',clientSearchPh:'Search by name or note…',studioTitle:'AI Studio',studioSub:'Record a session (with consent) or type a brief summary — transcription and note drafting happen entirely on this device. Drafts are never saved automatically; review and edit first.',genSettings:'Generation settings',client:'Client',date:'Date',llmModel:'Note model (LLM)',format:'Note format',outLang:'Output language',orientation:'Orientation / style (optional)',orientationPh:'e.g. CBT, person-centered, concise and objective…',customTpl:'Custom template / instructions (optional)',customTplPh:'Type or paste your own note template or instructions here — for example the sections you always want, wording you prefer, or things to always include or avoid. If this conflicts with the preset format above, your template wins. It is saved on this device and applies to both recording and summary generation.',tplSaving:'Saving…',tplSaved:'Saved on this device',enginesChecking:'Engines: checking…',recSource:'Recording source',srcMic:'In-person · microphone',srcTele:'Telehealth · microphone + system audio',audioDevice:'Audio input device',refreshDevices:'Refresh devices',deviceDefault:'System default',deviceUnnamed:'Microphone',micHint:'Records through the selected microphone — for in-person sessions. The input can also be a loopback device (Stereo Mix / VB-CABLE / BlackHole) that carries the telehealth call audio.',teleHint:'When you press Start, choose "Entire screen" and turn ON system-audio sharing — Murmur mixes your microphone with the computer audio (the client\'s voice). The shared video is discarded immediately; nothing is uploaded.',sysAudioUnsupported:'This system cannot capture system audio directly (common on macOS). Workaround: install a loopback device such as BlackHole, route the call audio to it, then pick it above as the audio input device and keep the source on microphone.',sysAudioShareFail:'System-audio sharing was cancelled or failed, so recording did not start.',sysAudioNoTrack:'No system audio was shared. Try again and share the entire screen with system audio enabled — or use a loopback device as the audio input instead.',mode1:'Mode 1 · Ambient recording → transcript',consentChk:'I have told the client and obtained their consent to record (recording and transcription stay on this device)',recStart:'Start recording',recStop:'Stop',orWord:'or',importAudio:'Import audio file',noAudioYet:'No audio yet',whisperModel:'Transcription model (Whisper)',transLang:'Transcription language',transcribe:'Transcribe',cancel:'Cancel',delAudio:'Delete recording after transcription',delTranscript:'Delete transcript after the note is saved',working:'Working…',transcript:'Transcript (editable)',therapistBtn:'+ Therapist:',clientBtn:'+ Client:',relabel:'Relabel current line',autoSeg:'Auto-segment speakers',transcriptPh:'The transcript will appear here. You can also paste a transcript from elsewhere.',genFromTranscript:'Generate note draft from transcript',mode2:'Mode 2 · Brief summary → note',briefLabel:'Brief summary (a few sentences: theme, key content, client state, plan)',briefPh:'e.g. Client reported work stress and two weeks of poor sleep; discussed sleep hygiene and boundaries; calmer than last session; agreed a wind-down routine, review next week.',genFromBrief:'Generate note draft from summary',notesTitle:'Notes',saveNote:'Save note',copyNote:'Copy',exportNote:'Export .txt',printNote:'Print / PDF',deleteNote:'Delete',notesSub:'Saved progress notes, stored only in the local encrypted database.',newNote:'+ New note',allClients:'All clients',notesSearchPh:'Search notes…',consentTitle:'Informed Consent for Recording',consentSub:'Print this form and have the client sign before any recording.',printForm:'Print form',modelsTitle:'Models & Settings',practiceSettings:'Practice settings',practitioner:'Practitioner name',practice:'Practice name',defOrientation:'Default orientation / style for generated notes',saveSettings:'Save settings',backupNow:'Back up database now',openData:'Open data folder',securityTitle:'Security & HIPAA safeguards',securityIntro:'Murmur is built to support your HIPAA compliance program: client data is encrypted on this device (SQLCipher / AES-256), never transmitted anywhere, access requires a personal account, and sign-ins and changes are recorded in a tamper-evident audit log. The project folder\'s HIPAA.md maps each safeguard and lists the organizational steps (policies, risk analysis, workforce training) that remain yours.',autoLockLabel:'Automatic lock after inactivity',lockOff:'Off (not recommended)',lock5:'5 minutes',lock10:'10 minutes (recommended)',lock15:'15 minutes',lock30:'30 minutes',usersTitle:'User accounts',changePwTitle:'Change your password',curPw:'Current password',newPw:'New password (at least 10 characters)',changePwBtn:'Change password',auditTitle:'Audit log',auditView:'View recent entries',auditVerifyBtn:'Verify log integrity',loadingTxt:'Loading…',dob:'Date of birth',cName:'Name / initials',cNamePh:'Use initials or a code name if you prefer',cStatus:'Status',statusActive:'Active',statusInactive:'Inactive',statusArchived:'Archived',cContact:'Contact (optional, stored locally only)',cNotes:'Notes',save:'Save',close:'Close',deleteTxt:'Delete',username:'Username',displayName:'Display name',setPassword:'Set password (at least 10 characters)',repeatPassword:'Repeat password',createAccount:'Create account',creating:'Creating…',passwordLbl:'Password',signInBtn:'Sign in',lockTitleSetup:'First run: create your account',lockHelpSetup:'Create the first local user. Password must be at least 10 characters.',lockHelpLogin:'Sign in with your local account.',lockedTitle:'App locked',lockedHelp:'Sign in again to protect client data.',pwMismatch:'The two passwords do not match.',enterUsername:'Enter a username.',pwTooShort:'Password must be at least 10 characters.',createFailed:'Could not create the account.',createFailedPrefix:'Could not create the account: ',signInFailed:'Sign-in failed.',signInFailedPrefix:'Sign-in failed: ',noBackend:'Desktop backend not detected: the Tauri API did not load. Please use a current desktop build.',backendFailPrefix:'Backend failed to start: ',noClient:'(no client)',newClientTitle:'New client',editClientTitle:'Edit client',enterClientName:'Enter a client name or code name.',clientSaved:'Client saved',clientDeleted:'Client deleted',delClientConfirm:'Delete client "{name}" and their {n} saved note(s)? This cannot be undone.',delClientConfirm2:'Confirm again: delete permanently?',thClient:'Client',thStatus:'Status',thNotes:'Notes',editAct:'Edit',newNoteInStudio:'New note in Studio',deleteAct:'Delete',noClients:'No clients yet. Add your first client to get started.',followLang:'Follow transcript language',autoDetect:'Auto-detect',downloadFirst:'(download a model first)',enginesLine:'Engines: Whisper {w} · Note engine {l} · Models folder: {dir}',ready:'ready',readyPill:'Ready',notFound:'not found',consentFirst:'Before recording, tell the client and obtain their consent, then tick the consent box.',micUnavailable:'Microphone unavailable: ',recordingToast:'Recording… (stored only on this device)',noAudioCaptured:'No audio was captured.',savingAudioToast:'Saving audio on this device…',audioReadyToast:'Audio ready — you can transcribe now',readingAudioToast:'Reading audio locally…',audioImportedToast:'Audio imported — you can transcribe now',audioReadFail:'Could not read that audio file: ',audioReadyInfo:'Audio ready ({size}, temp file on this device only)',nothingToSegment:'Nothing to segment yet.',resegmentConfirm:'This transcript already has speaker labels. Re-segment from scratch?',segmentedToast:'Speakers alternated as a starting point — please correct the labels',recordOrImportFirst:'Record or import audio first.',downloadWhisperFirst:'Download a transcription model first (Models & Settings).',transcribingLabel:'Transcribing on this device (long recordings take a while)…',procFailed:'Processing did not finish: ',deletedAsRequested:'Recording deleted as requested — transcript kept',transcriptionDone:'Transcription complete',emptyTranscript:'The transcript is empty — transcribe, record, or paste text first.',emptyBrief:'Write a brief summary first.',selectClientFirst:'Select a client first.',selectClientFirstGen:'Add and select a client first.',downloadLlmFirst:'Download a note model first (Models & Settings).',draftingLabel:'Drafting the note on this device…',draftingToast:'Drafting — the note editor will open when it is ready',draftReadyToast:'Draft ready — review, edit, then save',draftPlacedToast:'Draft placed in the first section — please organize it, then save',checkingEngines:'Checking engines and models…',enginesModelsTitle:'Engines & models (downloaded once, then fully offline)',transEngine:'Transcription engine (Whisper)',noteEngine:'Note generation engine',downloadedWord:'Downloaded',downloadBtn:'Download',downloadEngineBtn:'Download engine',foundWord:'Found: ',notFoundWord:'Not found',customPathPh:'or enter a custom engine path',savePathBtn:'Save path',macNote:'macOS note: there is no official prebuilt transcription-engine package. Install it with Homebrew (brew install whisper-cpp), or enter the full path to whisper-cli above.',downloadingLabel:'Downloading: ',cancelDownload:'Cancel download',lastDlFail:'Last download did not finish: ',dlStartedToast:'Download started — keep the app open',dlFailAlert:'Download did not finish: ',importWhisperOpt:'Import Whisper model (.bin)',importLlmOpt:'Import note model (.gguf)',importPathPh:'Full path to a model file you downloaded yourself',importModelBtn:'Import model',modelsStored:'Models are stored on this device: ',enterPathFirst:'Enter the full path to the engine program first.',pathSaved:'Engine path saved',enterModelPathFirst:'Enter the full path to the model file first.',modelImported:'Model imported: ',settingsSaved:'Settings saved',backupCreated:'Database backup created',backupFailPrefix:'Backup failed: ',storageEncrypted:'Encrypted local database',storageLocal:'Local database',storageAbout:'about',storageIntegrity:'integrity: ',storagePortable:'Portable mode (next to the app)',storageStandard:'Standard app data folder',storageDb:'DB: ',storageBackups:'Backups: ',couldNotSave:'Could not save to the local database: ',engineStatusUnavailable:'Engine status unavailable: ',editNoteTitle:'Edit note — ',newNoteTitle:'New note — draft (not saved yet)',noteSaved:'Note saved',noteSavedCleared:'Note saved — transcript cleared as requested',deleteNoteConfirm:'Delete this note permanently?',noteDeleted:'Note deleted',thDate:'Date',thFormat:'Format',thPreview:'Preview',openAct:'Open',noNotes:'No saved notes yet. Generate one in the AI Studio, or create one manually.',copied:'Copied',copyWarn:'Copying places unencrypted note text (protected health information) on the clipboard, where other apps can read it. Continue?',exportWarn:'The exported .txt file is NOT encrypted and will contain protected health information. Store it only in a secure location. Continue?',progressNote:'Progress Note',printClient:'Client:',printDate:'Date:',printFormat:'Format:',printSignature:'Clinician signature:',printSigDate:'Date:',signedInAs:'Signed in as {name} ({role}).',adminOnlyNote:'The full user list is visible to administrators only.',activePill:'Active',disabledPill:'Disabled',youSuffix:'(you)',disableBtn:'Disable',enableBtn:'Enable',usernamePh:'Username',displayNamePh:'Display name',passwordPh:'Password (10+ characters)',roleClinician:'Clinician',roleAdmin:'Admin',addUser:'Add user',ownAccountNote:'Give every person their own account — shared sign-ins defeat audit logging.',usernameShort:'Username must be at least 2 characters.',userCreated:'User created',createUserFail:'Could not create the user.',createUserFailPrefix:'Could not create the user: ',updateUserFail:'Could not update the user.',updateUserFailPrefix:'Could not update the user: ',pwChanged:'Password changed',changePwFail:'Could not change the password.',changePwFailPrefix:'Could not change the password: ',auditThTime:'Time',auditThUser:'User',auditThAction:'Action',auditThObject:'Object',auditThResult:'Result',noAuditEntries:'No audit entries yet.',auditLoadFail:'Could not load the audit log.',auditOkTxt:'Integrity check passed — the audit chain is intact.',auditFailTxt:'WARNING: audit log integrity check FAILED.',auditVerifyFail:'Could not verify the audit log.',autoLockOffToast:'Automatic lock is off',autoLockSet:'Automatic lock set to {m} minutes',lockedAutoToast:'Locked automatically after inactivity'},
+zh:{tagline:'本地 AI 咨询记录 · 不离开这个房间',lock:'锁定',navClients:'来访者',navStudio:'AI 工作室',navNotes:'记录',navConsent:'录音知情同意',navModels:'模型与设置',developedBy:'开发方',savedLocally:'已保存在本机',saving:'保存中…',saveFailed:'保存失败',clientsTitle:'来访者',clientsSub:'简单的本地来访者名单；保存的记录会关联到来访者。',addClient:'+ 新建来访者',clientSearchPh:'按姓名或备注搜索…',studioTitle:'AI 工作室',studioSub:'在取得同意后录音，或输入简要小结——转写与记录生成全部在本机完成。生成的草稿不会自动保存，请先核对修改。',genSettings:'生成设置',client:'来访者',date:'日期',llmModel:'记录生成模型 (LLM)',format:'记录格式',outLang:'输出语言',orientation:'咨询取向 / 风格（可选）',orientationPh:'例如：CBT、以人为中心、简洁客观…',customTpl:'自定义模板 / 指示（可选）',customTplPh:'输入或粘贴你自己的记录模板或指示——例如你固定要包含的段落、偏好的措辞、必须包含或避免的内容。若与上方预设格式冲突，以你的模板为准。模板保存在本机，录音与小结两种生成模式都会应用。',tplSaving:'保存中…',tplSaved:'已保存在本机',enginesChecking:'引擎：检查中…',recSource:'录音来源',srcMic:'线下面对面 · 麦克风',srcTele:'远程咨询 · 麦克风 + 系统音频',audioDevice:'音频输入设备',refreshDevices:'刷新设备',deviceDefault:'系统默认',deviceUnnamed:'麦克风',micHint:'通过所选麦克风录音——适用于线下咨询。输入设备也可以是回环设备 (Stereo Mix / VB-CABLE / BlackHole)，录到的就是远程通话音频。',teleHint:'按下开始后，请选择“整个屏幕”并打开系统音频共享——Murmur 会把你的麦克风与电脑音频（来访者的声音）混录。共享的屏幕视频会立即丢弃，全程不上传任何内容。',sysAudioUnsupported:'本系统无法直接捕获系统音频（macOS 常见）。替代办法：安装 BlackHole 等回环设备，把通话音频路由到该设备，然后在上方将其选为音频输入设备，并保持来源为麦克风。',sysAudioShareFail:'系统音频共享已取消或失败，录音未开始。',sysAudioNoTrack:'未共享到系统音频。请重试并确保共享整个屏幕且开启系统音频——或改用回环设备作为音频输入。',mode1:'模式一 · 环境录音 → 转写',consentChk:'我已告知来访者并取得其录音同意（录音与转写仅在本机进行）',recStart:'开始录音',recStop:'停止',orWord:'或',importAudio:'导入音频文件',noAudioYet:'暂无音频',whisperModel:'转写模型 (Whisper)',transLang:'转写语言',transcribe:'开始转写',cancel:'取消',delAudio:'转写后删除录音',delTranscript:'记录保存后删除转写稿',working:'处理中…',transcript:'转写稿（可编辑）',therapistBtn:'+ 咨询师：',clientBtn:'+ 来访者：',relabel:'重标当前行说话人',autoSeg:'自动分段说话人',transcriptPh:'转写稿将显示在这里，也可以粘贴其他来源的转写稿。',genFromTranscript:'根据转写稿生成记录草稿',mode2:'模式二 · 简要小结 → 记录',briefLabel:'咨询小结（几句话写清主题、主要内容、来访者状态与后续计划）',briefPh:'例如：来访者表示工作压力大、近两周睡眠差；讨论了睡眠卫生与边界；比上次平静；约定睡前放松流程，下周回顾。',genFromBrief:'根据小结生成记录草稿',notesTitle:'咨询记录',saveNote:'保存记录',copyNote:'复制',exportNote:'导出 .txt',printNote:'打印 / PDF',deleteNote:'删除',notesSub:'已保存的咨询记录，仅存放在本机加密数据库中。',newNote:'+ 新建记录',allClients:'全部来访者',notesSearchPh:'搜索记录…',consentTitle:'录音知情同意',consentSub:'录音前请打印此表并请来访者签署。',printForm:'打印表格',modelsTitle:'模型与设置',practiceSettings:'执业信息',practitioner:'咨询师姓名',practice:'机构 / 工作室名称',defOrientation:'生成记录的默认取向 / 风格',saveSettings:'保存设置',backupNow:'立即备份数据库',openData:'打开数据文件夹',securityTitle:'安全与 HIPAA 保障',securityIntro:'Murmur 按 HIPAA 安全规则的技术保障要求设计：来访者数据在本机加密存储 (SQLCipher / AES-256)，从不向任何地方传输，访问需要个人账户，登录与修改都记录在防篡改的审计日志中。项目文件夹中的 HIPAA.md 列出了每项保障的对应关系，以及仍需由机构自行完成的组织措施（政策、风险分析、员工培训）。',autoLockLabel:'无操作后自动锁定',lockOff:'关闭（不推荐）',lock5:'5 分钟',lock10:'10 分钟（推荐）',lock15:'15 分钟',lock30:'30 分钟',usersTitle:'用户账户',changePwTitle:'修改密码',curPw:'当前密码',newPw:'新密码（至少 10 位）',changePwBtn:'修改密码',auditTitle:'审计日志',auditView:'查看最近记录',auditVerifyBtn:'校验日志完整性',loadingTxt:'加载中…',dob:'出生日期',cName:'姓名 / 化名',cNamePh:'可使用姓名首字母或代号',cStatus:'状态',statusActive:'进行中',statusInactive:'已暂停',statusArchived:'已归档',cContact:'联系方式（可选，仅存本机）',cNotes:'备注',save:'保存',close:'关闭',deleteTxt:'删除',username:'用户名',displayName:'显示名称',setPassword:'设置密码（至少 10 位）',repeatPassword:'再次输入密码',createAccount:'创建账户',creating:'创建中…',passwordLbl:'密码',signInBtn:'登录',lockTitleSetup:'首次使用：创建账户',lockHelpSetup:'创建第一个本机用户。密码至少 10 位。',lockHelpLogin:'使用本机账户登录。',lockedTitle:'应用已锁定',lockedHelp:'请重新登录以保护来访者数据。',pwMismatch:'两次输入的密码不一致。',enterUsername:'请输入用户名。',pwTooShort:'密码至少 10 位。',createFailed:'无法创建账户。',createFailedPrefix:'无法创建账户：',signInFailed:'登录失败。',signInFailedPrefix:'登录失败：',noBackend:'未检测到桌面后端：Tauri API 未加载。请使用最新桌面构建。',backendFailPrefix:'后端启动失败：',noClient:'（未选择来访者）',newClientTitle:'新建来访者',editClientTitle:'编辑来访者',enterClientName:'请输入来访者姓名或代号。',clientSaved:'来访者已保存',clientDeleted:'来访者已删除',delClientConfirm:'删除来访者“{name}”及其 {n} 条已保存记录？此操作不可撤销。',delClientConfirm2:'再次确认：永久删除？',thClient:'来访者',thStatus:'状态',thNotes:'记录数',editAct:'编辑',newNoteInStudio:'在 AI 工作室新建记录',deleteAct:'删除',noClients:'尚无来访者。添加第一位来访者开始使用。',followLang:'跟随转写稿语言',autoDetect:'自动检测',downloadFirst:'（请先下载模型）',enginesLine:'引擎：Whisper {w} · 记录引擎 {l} · 模型文件夹：{dir}',ready:'就绪',readyPill:'就绪',notFound:'未找到',consentFirst:'录音前请先告知来访者并取得同意，然后勾选同意框。',micUnavailable:'麦克风不可用：',recordingToast:'录音中…（仅保存在本机）',noAudioCaptured:'未录到音频。',savingAudioToast:'正在将音频保存到本机…',audioReadyToast:'音频已就绪——可以开始转写',readingAudioToast:'正在本机读取音频…',audioImportedToast:'音频已导入——可以开始转写',audioReadFail:'无法读取该音频文件：',audioReadyInfo:'音频已就绪（{size}，临时文件仅存本机）',nothingToSegment:'暂无可分段的内容。',resegmentConfirm:'这份转写稿已有说话人标记。重新分段？',segmentedToast:'已按交替方式初步标注说话人——请核对修改',recordOrImportFirst:'请先录音或导入音频。',downloadWhisperFirst:'请先下载转写模型（模型与设置）。',transcribingLabel:'正在本机转写（较长的录音需要一些时间）…',procFailed:'处理未完成：',deletedAsRequested:'已按要求删除录音——转写稿已保留',transcriptionDone:'转写完成',emptyTranscript:'转写稿为空——请先转写、录音或粘贴文本。',emptyBrief:'请先填写咨询小结。',selectClientFirst:'请先选择来访者。',selectClientFirstGen:'请先添加并选择来访者。',downloadLlmFirst:'请先下载记录生成模型（模型与设置）。',draftingLabel:'正在本机生成记录草稿…',draftingToast:'正在生成——完成后将打开记录编辑器',draftReadyToast:'草稿已生成——请核对、修改后保存',draftPlacedToast:'草稿已放入第一段——请整理后保存',checkingEngines:'正在检查引擎与模型…',enginesModelsTitle:'引擎与模型（下载一次，之后完全离线）',transEngine:'转写引擎 (Whisper)',noteEngine:'记录生成引擎',downloadedWord:'已下载',downloadBtn:'下载',downloadEngineBtn:'下载引擎',foundWord:'已找到：',notFoundWord:'未找到',customPathPh:'或输入自定义引擎路径',savePathBtn:'保存路径',macNote:'macOS 说明：没有官方预编译的转写引擎包。请用 Homebrew 安装 (brew install whisper-cpp)，或在上方输入 whisper-cli 的完整路径。',downloadingLabel:'正在下载：',cancelDownload:'取消下载',lastDlFail:'上次下载未完成：',dlStartedToast:'下载已开始——请保持应用打开',dlFailAlert:'下载未完成：',importWhisperOpt:'导入 Whisper 模型 (.bin)',importLlmOpt:'导入记录模型 (.gguf)',importPathPh:'你自行下载的模型文件的完整路径',importModelBtn:'导入模型',modelsStored:'模型保存在本机：',enterPathFirst:'请先输入引擎程序的完整路径。',pathSaved:'引擎路径已保存',enterModelPathFirst:'请先输入模型文件的完整路径。',modelImported:'模型已导入：',settingsSaved:'设置已保存',backupCreated:'数据库备份已创建',backupFailPrefix:'备份失败：',storageEncrypted:'本机加密数据库',storageLocal:'本机数据库',storageAbout:'约',storageIntegrity:'完整性：',storagePortable:'便携模式（位于应用旁）',storageStandard:'标准应用数据文件夹',storageDb:'数据库：',storageBackups:'备份：',couldNotSave:'无法保存到本机数据库：',engineStatusUnavailable:'引擎状态不可用：',editNoteTitle:'编辑记录 —— ',newNoteTitle:'新建记录 —— 草稿（尚未保存）',noteSaved:'记录已保存',noteSavedCleared:'记录已保存——已按要求清除转写稿',deleteNoteConfirm:'永久删除这条记录？',noteDeleted:'记录已删除',thDate:'日期',thFormat:'格式',thPreview:'预览',openAct:'打开',noNotes:'尚无已保存记录。在 AI 工作室生成一条，或手动新建。',copied:'已复制',copyWarn:'复制会把未加密的记录文本（受保护健康信息）放到剪贴板，其他应用可以读取。继续？',exportWarn:'导出的 .txt 文件未加密且包含受保护健康信息。请只保存在安全位置。继续？',progressNote:'咨询记录',printClient:'来访者：',printDate:'日期：',printFormat:'格式：',printSignature:'咨询师签字：',printSigDate:'日期：',signedInAs:'当前登录：{name}（{role}）。',adminOnlyNote:'完整用户列表仅管理员可见。',activePill:'启用',disabledPill:'已停用',youSuffix:'（本人）',disableBtn:'停用',enableBtn:'启用',usernamePh:'用户名',displayNamePh:'显示名称',passwordPh:'密码（至少 10 位）',roleClinician:'临床人员',roleAdmin:'管理员',addUser:'添加用户',ownAccountNote:'请为每个人建立独立账户——共用账户会使审计日志失去意义。',usernameShort:'用户名至少 2 个字符。',userCreated:'用户已创建',createUserFail:'无法创建用户。',createUserFailPrefix:'无法创建用户：',updateUserFail:'无法更新用户。',updateUserFailPrefix:'无法更新用户：',pwChanged:'密码已修改',changePwFail:'无法修改密码。',changePwFailPrefix:'无法修改密码：',auditThTime:'时间',auditThUser:'用户',auditThAction:'操作',auditThObject:'对象',auditThResult:'结果',noAuditEntries:'暂无审计记录。',auditLoadFail:'无法加载审计日志。',auditOkTxt:'完整性校验通过——审计链完好。',auditFailTxt:'警告：审计日志完整性校验未通过。',auditVerifyFail:'无法校验审计日志。',autoLockOffToast:'自动锁定已关闭',autoLockSet:'自动锁定已设为 {m} 分钟',lockedAutoToast:'因长时间无操作已自动锁定'}
+};
+function detectUiLang(){try{const saved=window.desktopDB&&window.desktopDB.getPref('uiLang');if(saved==='zh'||saved==='en')return saved}catch(_){}try{const nav=String(navigator.language||(navigator.languages&&navigator.languages[0])||'en').toLowerCase();return nav.indexOf('zh')===0?'zh':'en'}catch(_){return 'en'}}
+let uiLang=detectUiLang();
+function t(k){const d=I18N[uiLang];return (d&&d[k])||I18N.en[k]||k}
+let lockMode='login';
+function devUrl(){return uiLang==='zh'?'https://mind.us/zh':'https://mind.us'}
+function openDevSite(e){if(e)e.preventDefault();try{const p=window.desktopDB&&window.desktopDB.openExternal(devUrl());if(p&&p.catch)p.catch(()=>{})}catch(_){}return false}
+function refreshLockTexts(){if(lockMode==='setup'){lockTitle.textContent=t('lockTitleSetup');lockHelp.textContent=t('lockHelpSetup')}else if(lockMode==='locked'){lockTitle.textContent=t('lockedTitle');lockHelp.textContent=t('lockedHelp')}else{lockTitle.textContent=t('signInBtn');lockHelp.textContent=t('lockHelpLogin')}}
+function applyUiLang(){document.documentElement.lang=uiLang==='zh'?'zh-CN':'en';document.querySelectorAll('[data-i]').forEach(el=>{const v=t(el.getAttribute('data-i'));if(v)el.textContent=v});document.querySelectorAll('[data-i-ph]').forEach(el=>{const v=t(el.getAttribute('data-i-ph'));if(v)el.placeholder=v});uiLangBtn.textContent=uiLang==='zh'?'EN':'中文';const dl=document.getElementById('devLink');if(dl){dl.textContent=uiLang==='zh'?'Mind X社区':'Mind X Associates';dl.href=devUrl()}
+ if(lockScreen.classList.contains('show'))refreshLockTexts();
+ if(currentAuthUser){const keep={o:aiOrientation.value,ct:aiCustomTemplate.value,tr:aiTranscript.value,b:aiBrief.value,f:aiFormat.value,ol:aiOutLang.value,nf:nFormat.value,nol:nOutLang.value,tl:aiLang.value};studioBuilt=false;buildStudioControls();aiOrientation.value=keep.o;aiCustomTemplate.value=keep.ct;aiTranscript.value=keep.tr;aiBrief.value=keep.b;aiTranscriptCache=keep.tr;aiBriefCache=keep.b;const restore=(sel,v)=>{if(v&&[...sel.options].some(o=>o.value===v))sel.value=v};restore(aiFormat,keep.f);restore(aiOutLang,keep.ol);restore(nFormat,keep.nf);restore(nOutLang,keep.nol);restore(aiLang,keep.tl);renderAll();if(aiStatusCache){populateModelSelects();renderModelsBody()}renderSecurity();renderConsent();storage()}}
+function toggleUiLang(){uiLang=uiLang==='zh'?'en':'zh';if(window.desktopDB)window.desktopDB.setPref('uiLang',uiLang);applyUiLang()}
+
+// ---------- clients ----------
+function openClient(id){const c=id?db.clients.find(x=>x.id===id):null;cId.value=c?c.id:'';cName.value=c?c.name:'';cDob.value=c?(c.dob||''):'';cStatus.value=c?(c.status||'Active'):'Active';cContact.value=c?(c.contact||''):'';cNotes.value=c?(c.notes||''):'';clientDialogTitle.textContent=c?t('editClientTitle'):t('newClientTitle');cDeleteBtn.style.display=c?'':'none';clientDialog.showModal()}
+async function saveClient(){if(!cName.value.trim())return alert(t('enterClientName'));const x={id:cId.value||uid(),name:cName.value.trim(),dob:cDob.value||'',status:cStatus.value,contact:cContact.value.trim(),notes:cNotes.value.trim(),updatedAt:new Date().toISOString()};const i=db.clients.findIndex(c=>c.id===x.id);if(i>=0)db.clients[i]={...db.clients[i],...x};else db.clients.push(x);clientDialog.close();await saveAll();toast(t('clientSaved'))}
+async function deleteClientForever(id){const c=db.clients.find(x=>x.id===id);if(!c)return;const n=db.sessions.filter(s=>s.clientId===id).length;if(!confirm(t('delClientConfirm').replace('{name}',c.name).replace('{n}',n)))return;if(!confirm(t('delClientConfirm2')))return;db.clients=db.clients.filter(x=>x.id!==id);db.sessions=db.sessions.filter(s=>s.clientId!==id);await saveAll();toast(t('clientDeleted'))}
+function deleteClientFromDialog(){clientDialog.close();deleteClientForever(cId.value)}
+function statusLabel(s){const v=t('status'+(s||'Active'));return v&&v.indexOf('status')!==0?v:(s||'Active')}
+function renderClients(){const q=(clientFilter.value||'').toLowerCase();const rows=db.clients.filter(c=>!q||c.name.toLowerCase().includes(q)||(c.notes||'').toLowerCase().includes(q));clientsTable.innerHTML=rows.length?`<table><tr><th>${t('thClient')}</th><th>${t('thStatus')}</th><th>${t('thNotes')}</th><th></th></tr>${rows.map(c=>{const n=db.sessions.filter(s=>s.clientId===c.id).length;return `<tr><td><b>${esc(c.name)}</b></td><td>${esc(statusLabel(c.status))}</td><td>${n}</td><td><a class="action" onclick="openClient('${c.id}')">${t('editAct')}</a> · <a class="action" onclick="goStudioForClient('${c.id}')">${t('newNoteInStudio')}</a> · <a class="action" onclick="deleteClientForever('${c.id}')">${t('deleteAct')}</a></td></tr>`}).join('')}</table>`:`<div class="empty">${t('noClients')}</div>`}
+function goStudioForClient(id){showView('studio');aiClient.value=id}
+function refreshClientSelects(){const opts=db.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');const keep=(sel,val)=>{const cur=val!==undefined?val:sel.value;sel.innerHTML=opts;if([...sel.options].some(o=>o.value===cur))sel.value=cur};keep(aiClient);keep(nClient);const f=notesFilterClient;const cur=f.value;f.innerHTML='<option value="">'+t('allClients')+'</option>'+opts;f.value=cur}
+
+</script>
+<script>
+
+// ================= AI Studio =================
+const FORMATS={
+ soap:{label:'SOAP',sections:[['subjective','Subjective (S) — what the client reported','主观 (S) — 来访者自述'],['objective','Objective (O) — observable presentation and behavior','客观 (O) — 可观察的表现与行为'],['assessment','Assessment (A) — clinical impressions and progress','评估 (A) — 临床印象与进展'],['plan','Plan (P) — plan, homework, next steps','计划 (P) — 计划、作业与下一步']]},
+ dap:{label:'DAP',sections:[['data','Data (D) — session content and observations','资料 (D) — 咨询内容与观察'],['assessment','Assessment (A) — clinical impressions and progress','评估 (A) — 临床印象与进展'],['plan','Plan (P) — plan, homework, next steps','计划 (P) — 计划、作业与下一步']]},
+ birp:{label:'BIRP',sections:[['behavior','Behavior (B) — presenting concerns and session behavior','行为 (B) — 主诉与咨询中的行为表现'],['intervention','Intervention (I) — what the clinician did','干预 (I) — 咨询师所做的干预'],['response','Response (R) — how the client responded','反应 (R) — 来访者的回应'],['plan','Plan (P) — plan, homework, next steps','计划 (P) — 计划、作业与下一步']]},
+ narrative:{label:'Narrative',sections:[['narrative','Narrative — a flowing, structured progress note','叙事 — 流畅、结构完整的咨询记录']]}
+};
+const OUT_LANGS=[['follow','Follow transcript language'],['en','English'],['zh-CN','简体中文 (Simplified Chinese)'],['zh-TW','繁體中文 (Traditional Chinese)'],['es','Español (Spanish)'],['ja','日本語 (Japanese)'],['ko','한국어 (Korean)'],['fr','Français (French)'],['de','Deutsch (German)'],['pt','Português (Portuguese)']];
+const TRANS_LANGS=[['auto','Auto-detect'],['en','English'],['zh','中文 Chinese (Mandarin)'],['yue','粤语 Cantonese'],['es','Español Spanish'],['ja','日本語 Japanese'],['ko','한국어 Korean'],['fr','Français French'],['de','Deutsch German'],['pt','Português Portuguese'],['ru','Русский Russian'],['it','Italiano Italian'],['nl','Nederlands Dutch'],['ar','العربية Arabic'],['hi','हिन्दी Hindi'],['vi','Tiếng Việt Vietnamese'],['th','ไทย Thai'],['id','Bahasa Indonesia'],['tr','Türkçe Turkish'],['pl','Polski Polish'],['uk','Українська Ukrainian'],['sv','Svenska Swedish'],['da','Dansk Danish'],['fi','Suomi Finnish'],['no','Norsk Norwegian'],['cs','Čeština Czech'],['el','Ελληνικά Greek'],['hu','Magyar Hungarian'],['ro','Română Romanian'],['fa','فارسی Persian'],['he','עברית Hebrew'],['ms','Bahasa Melayu Malay'],['tl','Tagalog'],['ur','اردو Urdu']];
+let aiStatusCache=null,aiAudioPath='',aiPollTimer=null,aiDlTimer=null,recState=null,recTick=null,aiTranscriptCache='',aiBriefCache='',pendingDelTranscript=false,studioBuilt=false,customTplTimer=null,studioListeners=false;
+const aiEl=id=>document.getElementById(id);
+const aiFmtBytes=n=>{n=Number(n)||0;if(n>=1e9)return (n/1e9).toFixed(2)+' GB';if(n>=1e6)return (n/1e6).toFixed(1)+' MB';if(n>=1e3)return (n/1e3).toFixed(0)+' KB';return n+' B'};
+function outLangLabel(v){const f=OUT_LANGS.find(x=>x[0]===v);return f?f[1]:'English'}
+function buildStudioControls(){if(studioBuilt)return;studioBuilt=true;
+ aiFormat.innerHTML=Object.entries(FORMATS).map(([k,f])=>`<option value="${k}">${f.label}</option>`).join('');
+ aiOutLang.innerHTML=OUT_LANGS.map(([v,l])=>`<option value="${v}">${v==='follow'?t('followLang'):l}</option>`).join('');
+ nFormat.innerHTML=Object.entries(FORMATS).map(([k,f])=>`<option value="${k}">${f.label}</option>`).join('');
+ nOutLang.innerHTML=OUT_LANGS.map(([v,l])=>`<option value="${v}">${v==='follow'?t('followLang'):l}</option>`).join('');
+ aiLang.innerHTML=TRANS_LANGS.map(([v,l])=>`<option value="${v}">${v==='auto'?t('autoDetect'):l}</option>`).join('');aiLang.value='auto';
+ aiOrientation.value=db.settings.orientation||'';
+ try{const src=window.desktopDB.getPref('aiRecSource');if(src==='tele'||src==='mic')aiRecSource.value=src}catch(_){}
+ refreshAudioDevices(false);updateRecHint();
+ const tpl=(window.desktopDB&&window.desktopDB.getPref('aiCustomTemplate'))||'';aiCustomTemplate.value=tpl;
+ if(!studioListeners){studioListeners=true;
+ aiCustomTemplate.addEventListener('input',()=>{clearTimeout(customTplTimer);aiCustomTplStatus.textContent=t('tplSaving');customTplTimer=setTimeout(()=>{if(window.desktopDB)window.desktopDB.setPref('aiCustomTemplate',aiCustomTemplate.value);aiCustomTplStatus.textContent=t('tplSaved')},400)});
+ aiTranscript.addEventListener('input',()=>{aiTranscriptCache=aiTranscript.value});
+ aiBrief.addEventListener('input',()=>{aiBriefCache=aiBrief.value});}
+}
+function onRecSourceChange(){try{window.desktopDB.setPref('aiRecSource',aiRecSource.value)}catch(_){}updateRecHint()}
+function onAudioDeviceChange(){try{window.desktopDB.setPref('aiAudioDevice',aiAudioDevice.value)}catch(_){}}
+function updateRecHint(){const el=document.getElementById('aiRecHint');if(el)el.textContent=aiRecSource&&aiRecSource.value==='tele'?t('teleHint'):t('micHint')}
+async function refreshAudioDevices(prime){const sel=aiAudioDevice;if(!sel)return;let keep=sel.value||'';try{keep=keep||window.desktopDB.getPref('aiAudioDevice')||''}catch(_){}
+ try{if(prime&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){const s=await navigator.mediaDevices.getUserMedia({audio:true});s.getTracks().forEach(x=>x.stop())}}catch(_){}
+ let devs=[];try{devs=await navigator.mediaDevices.enumerateDevices()}catch(_){}
+ const inputs=(devs||[]).filter(d=>d.kind==='audioinput');
+ sel.innerHTML='<option value="">'+t('deviceDefault')+'</option>'+inputs.map((d,i)=>`<option value="${esc(d.deviceId)}">${esc(d.label||(t('deviceUnnamed')+' '+(i+1)))}</option>`).join('');
+ if(keep&&[...sel.options].some(o=>o.value===keep))sel.value=keep}
+function populateModelSelects(){if(!aiStatusCache)return;const wm=aiStatusCache.models.filter(m=>m.kind==='whisper'),lm=aiStatusCache.models.filter(m=>m.kind==='llm');
+ const wOpts=wm.filter(m=>m.downloaded).map(m=>`<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('');const wCur=aiWhisperModel.value;aiWhisperModel.innerHTML=wOpts||('<option value="">'+t('downloadFirst')+'</option>');if(wOpts&&[...aiWhisperModel.options].some(o=>o.value===wCur))aiWhisperModel.value=wCur;
+ const lOpts=lm.filter(m=>m.downloaded).map(m=>`<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('');const lCur=aiLlmModel.value;aiLlmModel.innerHTML=lOpts||('<option value="">'+t('downloadFirst')+'</option>');if(lOpts&&[...aiLlmModel.options].some(o=>o.value===lCur))aiLlmModel.value=lCur;
+ aiEngineStatus.textContent=t('enginesLine').replace('{w}',aiStatusCache.whisper.found?t('ready'):t('notFound')).replace('{l}',aiStatusCache.llama.found?t('ready'):t('notFound')).replace('{dir}',aiStatusCache.modelsDir)}
+async function refreshAiStatus(){if(!window.desktopDB||!currentAuthUser)return;try{aiStatusCache=await window.desktopDB.aiStatus();populateModelSelects();if(document.getElementById('models').classList.contains('active'))renderModelsBody()}catch(e){aiEngineStatus.textContent=t('engineStatusUnavailable')+(e&&e.message||e)}}
+// ---------- recording (WebAudio -> 16kHz WAV, uploaded to the backend in chunks) ----------
+function floatTo16(buf){const out=new Int16Array(buf.length);for(let i=0;i<buf.length;i++){const v=Math.max(-1,Math.min(1,buf[i]));out[i]=v<0?v*0x8000:v*0x7fff}return out}
+function downsampleTo16k(buf,fromRate){if(fromRate===16000)return floatTo16(buf);const ratio=fromRate/16000;const len=Math.floor(buf.length/ratio);const out=new Int16Array(len);for(let i=0;i<len;i++){const start=Math.floor(i*ratio),end=Math.floor((i+1)*ratio);let sum=0,cnt=0;for(let j=start;j<end&&j<buf.length;j++){sum+=buf[j];cnt++}const v=cnt?sum/cnt:0;out[i]=Math.max(-1,Math.min(1,v))<0?v*0x8000:v*0x7fff}return out}
+function encodeWav(int16,rate){const buf=new ArrayBuffer(44+int16.length*2);const v=new DataView(buf);const wstr=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};wstr(0,'RIFF');v.setUint32(4,36+int16.length*2,true);wstr(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);wstr(36,'data');v.setUint32(40,int16.length*2,true);for(let i=0;i<int16.length;i++)v.setInt16(44+i*2,int16[i],true);return new Uint8Array(buf)}
+function u8ToB64(u8){let s='';for(let i=0;i<u8.length;i+=32768)s+=String.fromCharCode.apply(null,u8.subarray(i,i+32768));return btoa(s)}
+async function uploadWavBytes(u8){const r=await window.desktopDB.audioBegin();const CH=700000;for(let i=0;i<u8.length;i+=CH)await window.desktopDB.audioAppend(r.id,u8ToB64(u8.subarray(i,i+CH)));const fin=await window.desktopDB.audioFinish(r.id);aiAudioPath=fin.path;aiAudioInfo.textContent=t('audioReadyInfo').replace('{size}',aiFmtBytes(fin.bytes));return fin}
+async function startRecording(){if(!aiConsent.checked)return alert(t('consentFirst'));
+ const tele=aiRecSource&&aiRecSource.value==='tele';
+ if(tele&&!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia))return alert(t('sysAudioUnsupported'));
+ try{
+  const devId=aiAudioDevice?aiAudioDevice.value:'';
+  const micStream=await navigator.mediaDevices.getUserMedia({audio:devId?{deviceId:{exact:devId}}:true});
+  const streams=[micStream];
+  if(tele){let dispStream=null;
+   try{dispStream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true})}catch(e){micStream.getTracks().forEach(x=>x.stop());return alert(t('sysAudioShareFail'))}
+   if(!dispStream||!dispStream.getAudioTracks().length){micStream.getTracks().forEach(x=>x.stop());if(dispStream)dispStream.getTracks().forEach(x=>x.stop());return alert(t('sysAudioNoTrack'))}
+   dispStream.getVideoTracks().forEach(x=>x.stop());streams.push(dispStream)}
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();const proc=ctx.createScriptProcessor(4096,1,1);const chunks=[];proc.onaudioprocess=e=>{chunks.push(downsampleTo16k(e.inputBuffer.getChannelData(0),ctx.sampleRate))};
+  streams.forEach(s=>{try{ctx.createMediaStreamSource(s).connect(proc)}catch(_){}});proc.connect(ctx.destination);
+  recState={ctx,streams,proc,chunks,startedAt:Date.now()};aiRecBtn.disabled=true;aiRecStopBtn.disabled=false;recTick=setInterval(()=>{const sec=Math.floor((Date.now()-recState.startedAt)/1000);aiRecTime.textContent=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0')},500);toast(t('recordingToast'))
+ }catch(e){alert(t('micUnavailable')+(e&&e.message||e))}}
+async function stopRecording(){if(!recState)return;clearInterval(recTick);try{recState.proc.disconnect();(recState.streams||(recState.stream?[recState.stream]:[])).forEach(s=>{try{s.getTracks().forEach(x=>x.stop())}catch(_){}});await recState.ctx.close()}catch(_){}const total=recState.chunks.reduce((a,c)=>a+c.length,0);const pcm=new Int16Array(total);let off=0;recState.chunks.forEach(c=>{pcm.set(c,off);off+=c.length});recState=null;aiRecBtn.disabled=false;aiRecStopBtn.disabled=true;aiRecTime.textContent='00:00';if(!total)return alert(t('noAudioCaptured'));toast(t('savingAudioToast'));await uploadWavBytes(encodeWav(pcm,16000));toast(t('audioReadyToast'))}
+async function importAudioFile(input){const f=input.files&&input.files[0];input.value='';if(!f)return;try{toast(t('readingAudioToast'));const ab=await f.arrayBuffer();const actx=new (window.AudioContext||window.webkitAudioContext)();const decoded=await actx.decodeAudioData(ab);const off=new OfflineAudioContext(1,Math.ceil(decoded.duration*16000),16000);const srcNode=off.createBufferSource();srcNode.buffer=decoded;srcNode.connect(off.destination);srcNode.start();const rendered=await off.startRendering();await actx.close();await uploadWavBytes(encodeWav(floatTo16(rendered.getChannelData(0)),16000));toast(t('audioImportedToast'))}catch(e){alert(t('audioReadFail')+(e&&e.message||e))}}
+// ---------- speaker-segment aids ----------
+function insertSpeakerMarker(who){const ta=aiTranscript;const marker=(ta.value&&!ta.value.endsWith('\n')?'\n':'')+who+': ';const pos=ta.selectionStart??ta.value.length;ta.value=ta.value.slice(0,pos)+marker+ta.value.slice(pos);aiTranscriptCache=ta.value;ta.focus();ta.selectionStart=ta.selectionEnd=pos+marker.length}
+function relabelCurrentLine(){const ta=aiTranscript;const pos=ta.selectionStart??0;const start=ta.value.lastIndexOf('\n',pos-1)+1;let end=ta.value.indexOf('\n',pos);if(end<0)end=ta.value.length;let line=ta.value.slice(start,end);const m=line.match(/^(Therapist|Client|咨询师|来访者)\s*[:：]\s*/);let next;if(!m)next='Therapist: '+line;else if(m[1]==='Therapist'||m[1]==='咨询师')next='Client: '+line.slice(m[0].length);else next=line.slice(m[0].length);ta.value=ta.value.slice(0,start)+next+ta.value.slice(end);aiTranscriptCache=ta.value;ta.focus();ta.selectionStart=ta.selectionEnd=start+next.length}
+function autoSegmentTranscript(){const ta=aiTranscript;const raw=ta.value.trim();if(!raw)return alert(t('nothingToSegment'));if(/^(Therapist|Client)[:：]/m.test(raw)&&!confirm(t('resegmentConfirm')))return;const parts=raw.replace(/^(Therapist|Client|咨询师|来访者)\s*[:：]\s*/gm,'').split(/\n+/).flatMap(p=>p.split(/(?<=[.!?。！？])\s+/)).map(s=>s.trim()).filter(Boolean);ta.value=parts.map((s,i)=>(i%2===0?'Client: ':'Therapist: ')+s).join('\n');aiTranscriptCache=ta.value;toast(t('segmentedToast'))}
+// ---------- transcribe + generate ----------
+async function startTranscribe(){if(!aiAudioPath)return alert(t('recordOrImportFirst'));const model=aiWhisperModel.value;if(!model)return alert(t('downloadWhisperFirst'));try{await window.desktopDB.transcribeStart(aiAudioPath,model,aiLang.value);aiShowProc(t('transcribingLabel'));aiStartProcPoll()}catch(e){alert(String(e))}}
+function aiShowProc(label){aiProcWrap.style.display='block';aiProcLabel.textContent=label;aiProcBar.style.width='5%'}
+function aiStartProcPoll(){clearInterval(aiPollTimer);aiPollTimer=setInterval(aiPollOnce,800)}
+async function aiPollOnce(){let p=null;try{p=await window.desktopDB.aiProcPoll()}catch(_){return}if(!p||!p.kind)return;if(p.progress>=0)aiProcBar.style.width=Math.min(100,p.progress)+'%';if(!p.done)return;clearInterval(aiPollTimer);aiProcWrap.style.display='none';if(p.error){alert(t('procFailed')+p.error);return}
+ if(p.kind==='transcribe'){const text=(p.output||'').split('\n').map(x=>x.trim()).filter(Boolean).join('\n');aiTranscript.value=text;aiTranscriptCache=text;if(aiDelAudio.checked&&aiAudioPath){try{await window.desktopDB.audioDiscard(aiAudioPath)}catch(_){}aiAudioPath='';aiAudioInfo.textContent=t('deletedAsRequested')}toast(t('transcriptionDone'))}
+ else if(p.kind==='generate'){applyGeneratedNote(p.output||'')}}
+async function aiCancelProc(){try{await window.desktopDB.aiProcCancel()}catch(_){}clearInterval(aiPollTimer);aiProcWrap.style.display='none'}
+function getCustomTemplate(){const v=(aiCustomTemplate?aiCustomTemplate.value:'')||(window.desktopDB?window.desktopDB.getPref('aiCustomTemplate'):'')||'';return v}
+function buildNotePrompt(source,sourceKind){const fmt=FORMATS[aiFormat.value]||FORMATS.soap;const keys=fmt.sections.map(s=>s[0]);const spec=fmt.sections.map(([k,d])=>`"${k}": ${d}`).join('; ');
+ const langLine=aiOutLang.value==='follow'?'Write the note in the same language as the source material.':`Write the note entirely in ${outLangLabel(aiOutLang.value)}.`;
+ const orient=(aiOrientation.value||'').trim();const custom=getCustomTemplate();
+ let user='';if(custom)user+=`CUSTOM TEMPLATE / INSTRUCTIONS FROM THE CLINICIAN (highest priority — follow these over the preset format wherever they conflict):\n${custom}\n\n`;
+ user+=`Note format: ${fmt.label}. Return a JSON object with exactly these keys: ${keys.map(k=>'"'+k+'"').join(', ')}. Section guide: ${spec}.\n${langLine}\n`;if(orient)user+=`Clinician orientation / style: ${orient}.\n`;
+ user+=`\nThe source is ${sourceKind==='brief'?'a brief summary written by the clinician after the session':'a transcript of the session'}:\n${source}`;
+ return `<|im_start|>system\nYou are a clinical documentation assistant. Turn the clinician's material into a professional progress-note draft. Rules: use ONLY information present in the source; never invent facts, diagnoses, numbers, or names that were not mentioned; write in the third person, professionally and concisely, in an objective, non-stigmatizing tone; preserve any risk information (self-harm, suicidality, harm to others) faithfully. If the clinician provided a custom template or instructions, those take priority over every other formatting instruction. Output ONLY one JSON object — no other text.<|im_end|>\n<|im_start|>user\n${user}<|im_end|>\n<|im_start|>assistant\n`}
+async function generateNote(from){const source=(from==='transcript'?aiTranscript.value:aiBrief.value).trim();if(!source)return alert(from==='transcript'?t('emptyTranscript'):t('emptyBrief'));if(!aiClient.value)return alert(t('selectClientFirstGen'));const model=aiLlmModel.value;if(!model)return alert(t('downloadLlmFirst'));pendingDelTranscript=!!aiDelTranscript.checked;try{await window.desktopDB.generateStart(model,buildNotePrompt(source,from));aiShowProc(t('draftingLabel'));aiStartProcPoll();toast(t('draftingToast'))}catch(e){alert(String(e))}}
+function applyGeneratedNote(raw){let text=raw||'';const marker='<|im_start|>assistant';const idx=text.lastIndexOf(marker);if(idx>=0)text=text.slice(idx+marker.length);text=text.replace(/<\|im_end\|>[\s\S]*$/,'').replace(/llama_print_timings[\s\S]*$/,'').trim();let fields=null;const s=text.indexOf('{'),e=text.lastIndexOf('}');if(s>=0&&e>s){try{fields=JSON.parse(text.slice(s,e+1))}catch(_){fields=null}}
+ const fmtKey=aiFormat.value;showView('notes');openNote('',{clientId:aiClient.value,date:aiDate.value||todayLocal(),format:fmtKey,outLang:aiOutLang.value,sections:fields||{},rawText:fields?'':text,fromAi:true});toast(fields?t('draftReadyToast'):t('draftPlacedToast'))}
+// ================= Models & Settings view =================
+function renderModels(){renderModelsBody()}
+function renderModelsBody(){const body=modelsBody;if(!aiStatusCache){body.innerHTML='<div class="card"><div class="empty">'+t('checkingEngines')+'</div></div>';return}
+ const s=aiStatusCache;const wm=s.models.filter(m=>m.kind==='whisper'),lm=s.models.filter(m=>m.kind==='llm');
+ const modelRow=m=>`<div class="between row" style="padding:7px 0;border-bottom:1px solid var(--line)"><div><b>${esc(m.label)}</b><div class="muted">${esc(m.file)}${m.downloaded?' · '+t('downloadedWord')+' '+aiFmtBytes(m.bytes):''}</div></div>${m.downloaded?'<span class="pill">'+t('readyPill')+'</span>':`<button class="secondary" onclick="aiStartDownload('${m.kind}-${m.id}')">${t('downloadBtn')}</button>`}</div>`;
+ const engineRow=(title,st,which,canDl)=>`<div class="between row" style="padding:7px 0;border-bottom:1px solid var(--line)"><div><b>${title}</b><div class="muted">${st.found?t('foundWord')+esc(st.path):t('notFoundWord')}</div></div><div class="row">${st.found?'<span class="pill">'+t('readyPill')+'</span>':(canDl?`<button class="secondary" onclick="aiStartDownload('engine-${which}')">${t('downloadEngineBtn')}</button>`:'')}<input id="path-${which}" placeholder="${t('customPathPh')}" style="width:230px"><button class="secondary" onclick="aiSaveEnginePath('${which}')">${t('savePathBtn')}</button></div></div>`;
+ const dl=s.download&&!s.download.done?`<div style="margin-top:10px"><div class="muted" id="aiDlLabel">${t('downloadingLabel')}${esc(s.download.label)} (${aiFmtBytes(s.download.received)}${s.download.total?' / '+aiFmtBytes(s.download.total):''})</div><div style="height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin:6px 0"><div id="aiDlBar" style="height:100%;background:var(--accent);width:${s.download.total?Math.min(100,Math.round(s.download.received/s.download.total*100)):5}%"></div></div><button class="secondary" onclick="aiCancelDownload()">${t('cancelDownload')}</button></div>`:(s.download&&s.download.error?`<p class="muted" style="color:#a13b3b">${t('lastDlFail')}${esc(s.download.error)}</p>`:'');
+ body.innerHTML=`<div class="card"><h3>${t('enginesModelsTitle')}</h3>
+ ${engineRow(t('transEngine'),s.whisper,'whisper',s.os==='windows')}
+ ${s.os!=='windows'&&!s.whisper.found?`<p class="muted">${t('macNote')}</p>`:''}
+ ${wm.map(modelRow).join('')}
+ ${engineRow(t('noteEngine'),s.llama,'llama',true)}
+ ${lm.map(modelRow).join('')}
+ ${dl}
+ <div class="row" style="margin-top:10px"><select id="aiImportKind" style="width:190px"><option value="whisper">${t('importWhisperOpt')}</option><option value="llm">${t('importLlmOpt')}</option></select><input id="aiImportPath" placeholder="${t('importPathPh')}" style="flex:1"><button class="secondary" onclick="aiImportModel()">${t('importModelBtn')}</button></div>
+ <p class="muted">${t('modelsStored')}${esc(s.modelsDir)}</p></div>`;
+ if(s.download&&!s.download.done)aiStartDlPoll()}
+async function aiStartDownload(what){try{await window.desktopDB.aiDownload(what);toast(t('dlStartedToast'));aiStartDlPoll()}catch(e){alert(String(e))}}
+async function aiCancelDownload(){try{await window.desktopDB.aiDownloadCancel()}catch(_){}}
+function aiStartDlPoll(){clearInterval(aiDlTimer);aiDlTimer=setInterval(async()=>{try{const s=await window.desktopDB.aiStatus();aiStatusCache=s;if(!s.download||s.download.done){clearInterval(aiDlTimer);populateModelSelects();if(document.getElementById('models').classList.contains('active'))renderModelsBody();if(s.download&&s.download.error)alert(t('dlFailAlert')+s.download.error)}else{const l=aiEl('aiDlLabel'),b=aiEl('aiDlBar');if(l)l.textContent=t('downloadingLabel')+s.download.label+' ('+aiFmtBytes(s.download.received)+(s.download.total?' / '+aiFmtBytes(s.download.total):'')+')';if(b)b.style.width=(s.download.total?Math.min(100,Math.round(s.download.received/s.download.total*100)):5)+'%'}}catch(_){}} ,900)}
+async function aiSaveEnginePath(which){const v=aiEl('path-'+which).value.trim();if(!v)return alert(t('enterPathFirst'));try{await window.desktopDB.aiSetEnginePath(which,v);toast(t('pathSaved'));refreshAiStatus()}catch(e){alert(String(e))}}
+async function aiImportModel(){const src=aiImportPath.value.trim();if(!src)return alert(t('enterModelPathFirst'));try{const name=await window.desktopDB.aiImportModel(aiImportKind.value,src);toast(t('modelImported')+name);refreshAiStatus()}catch(e){alert(String(e))}}
+async function savePracticeSettings(){db.settings.practitioner=setPractitioner.value.trim();db.settings.practice=setPractice.value.trim();db.settings.orientation=setOrientation.value.trim();aiOrientation.value=db.settings.orientation;await persistWorkspace();toast(t('settingsSaved'))}
+async function desktopBackup(){if(!window.desktopDB)return;try{await window.desktopDB.backup();toast(t('backupCreated'));storage()}catch(e){alert(t('backupFailPrefix')+(e&&e.message||e))}}
+async function openDataFolder(){if(window.desktopDB)await window.desktopDB.openDataFolder()}
+async function storage(){let info=null;try{info=window.desktopDB?await window.desktopDB.info():null}catch(_){info=null}if(info)storageInfo.textContent=`${info.encrypted?t('storageEncrypted'):t('storageLocal')} · ${t('storageAbout')} ${(info.size/1024).toFixed(1)} KB · ${t('storageIntegrity')}${info.integrity} · ${info.portableMode?t('storagePortable'):t('storageStandard')} · ${t('storageDb')}${info.dbPath} · ${t('storageBackups')}${info.backupDir}`}
+
+</script>
+<script>
+
+// ================= Notes =================
+let editingFromAi=false;
+function flattenSections(fmtKey,sections){const f=FORMATS[fmtKey]||FORMATS.soap;return f.sections.map(([k,d])=>`${d.split(' — ')[0]}\n${(sections&&sections[k])||''}`).join('\n\n')}
+function renderNoteSections(fmtKey,values){const f=FORMATS[fmtKey]||FORMATS.soap;nSections.innerHTML=f.sections.map(([k,d,dz])=>`<label>${esc(uiLang==='zh'&&dz?dz:d)}</label><textarea rows="4" data-seckey="${k}">${esc((values&&values[k])||'')}</textarea>`).join('')}
+function collectSections(){const out={};nSections.querySelectorAll('textarea[data-seckey]').forEach(t=>out[t.dataset.seckey]=t.value);return out}
+function openNote(id,prefill){const n=id?db.sessions.find(x=>x.id===id):null;noteEditorWrap.style.display='block';nId.value=n?n.id:'';editingFromAi=!!(prefill&&prefill.fromAi);
+ if(n){nClient.value=n.clientId;nDate.value=n.date||todayLocal();nFormat.value=n.format||'soap';nOutLang.value=n.outputLanguage||'follow';renderNoteSections(n.format||'soap',n.sections||{});noteEditorTitle.textContent=t('editNoteTitle')+clientName(n.clientId)}
+ else{const p=prefill||{};if(p.clientId)nClient.value=p.clientId;if(!nClient.value&&db.clients.length)nClient.value=db.clients[0].id;nDate.value=p.date||todayLocal();nFormat.value=p.format||'soap';nOutLang.value=p.outLang||'follow';const vals={...(p.sections||{})};if(p.rawText){const firstKey=(FORMATS[nFormat.value]||FORMATS.soap).sections[0][0];vals[firstKey]=p.rawText}renderNoteSections(nFormat.value,vals);noteEditorTitle.textContent=t('newNoteTitle')}
+ nDeleteBtn.style.display=n?'':'none';noteEditorWrap.scrollIntoView({behavior:'smooth'})}
+function changeNoteFormat(){const vals=collectSections();renderNoteSections(nFormat.value,vals)}
+function closeNoteEditor(){noteEditorWrap.style.display='none';editingFromAi=false}
+async function saveNote(){if(!nClient.value)return alert(t('selectClientFirst'));const sections=collectSections();const fmtKey=nFormat.value;const rec={id:nId.value||uid(),clientId:nClient.value,date:nDate.value||todayLocal(),format:fmtKey,outputLanguage:nOutLang.value,sections,text:flattenSections(fmtKey,sections),updatedAt:new Date().toISOString()};const i=db.sessions.findIndex(s=>s.id===rec.id);if(i>=0)db.sessions[i]={...db.sessions[i],...rec};else{rec.createdAt=new Date().toISOString();db.sessions.push(rec)}nId.value=rec.id;await persistWorkspace();renderNotes();refreshClientSelects();
+ if(editingFromAi&&pendingDelTranscript){aiTranscript.value='';aiTranscriptCache='';aiBrief.value='';aiBriefCache='';pendingDelTranscript=false;toast(t('noteSavedCleared'))}else toast(t('noteSaved'));editingFromAi=false}
+function currentNoteRecordFromEditor(){const sections=collectSections();return {clientId:nClient.value,date:nDate.value,format:nFormat.value,sections,text:flattenSections(nFormat.value,sections)}}
+function copyNoteText(){if(!confirm(t('copyWarn')))return;auditNoteAction('Copy note','Note copied to clipboard as plain text');const r=currentNoteRecordFromEditor();const txt=`${t('progressNote')} — ${clientName(r.clientId)} — ${r.date||''} (${(FORMATS[r.format]||{}).label||r.format})\n\n${r.text}`;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(()=>toast(t('copied')));else{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast(t('copied'))}catch(_){}ta.remove()}}
+function exportNoteText(){if(!confirm(t('exportWarn')))return;auditNoteAction('Export note','Plain-text .txt export');const r=currentNoteRecordFromEditor();const txt=`${t('progressNote')} — ${clientName(r.clientId)} — ${r.date||''} (${(FORMATS[r.format]||{}).label||r.format})\n\n${r.text}`;const blob=new Blob([txt],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`note-${(clientName(r.clientId)||'client').replace(/[^\w-]+/g,'_')}-${r.date||todayLocal()}.txt`;a.click();URL.revokeObjectURL(a.href)}
+function printHtml(html){printArea.innerHTML=html;document.body.classList.add('has-print');window.print();setTimeout(()=>document.body.classList.remove('has-print'),300)}
+function printCurrentNote(){auditNoteAction('Print note','Note printed / saved to PDF from the editor');const r=currentNoteRecordFromEditor();printHtml(`<div class="consent-doc"><h3>${t('progressNote')}</h3><p><b>${t('printClient')}</b> ${esc(clientName(r.clientId))} &nbsp; <b>${t('printDate')}</b> ${esc(r.date||'')} &nbsp; <b>${t('printFormat')}</b> ${esc((FORMATS[r.format]||{}).label||'')}</p><pre style="white-space:pre-wrap;font-family:inherit">${esc(r.text)}</pre><div class="sig">${t('printSignature')} <span></span> ${t('printSigDate')} <span></span></div></div>`)}
+async function deleteCurrentNote(){if(!nId.value)return closeNoteEditor();await deleteNote(nId.value);closeNoteEditor()}
+async function deleteNote(id){if(!confirm(t('deleteNoteConfirm')))return;db.sessions=db.sessions.filter(s=>s.id!==id);await persistWorkspace();renderNotes();toast(t('noteDeleted'))}
+function renderNotes(){const f=notesFilterClient.value||'';const q=(notesSearch.value||'').toLowerCase();const rows=db.sessions.filter(s=>(!f||s.clientId===f)&&(!q||(s.text||'').toLowerCase().includes(q)||clientName(s.clientId).toLowerCase().includes(q))).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+ notesList.innerHTML=rows.length?`<table><tr><th>${t('thDate')}</th><th>${t('thClient')}</th><th>${t('thFormat')}</th><th>${t('thPreview')}</th><th></th></tr>${rows.map(s=>`<tr><td>${esc(s.date||'')}</td><td><b>${esc(clientName(s.clientId))}</b></td><td>${esc((FORMATS[s.format]||{}).label||s.format||'')}</td><td class="muted">${esc(String(s.text||'').replace(/\s+/g,' ').slice(0,90))}…</td><td><a class="action" onclick="openNote('${s.id}')">${t('openAct')}</a> · <a class="action" onclick="deleteNote('${s.id}')">${t('deleteAct')}</a></td></tr>`).join('')}</table>`:`<div class="empty">${t('noNotes')}</div>`}
+// ================= Consent forms =================
+let consentLang='en';
+function setConsentLang(l){consentLang=l;renderConsent()}
+function consentHtml(lang){const p=db.settings.practitioner||'',pr=db.settings.practice||'';
+ if(lang==='zh')return `<div class="consent-doc"><h3>录音与本地 AI 生成记录 · 知情同意书</h3><p>请仔细阅读并在下方签字。</p><p>您的咨询师使用一款在本机运行的软件工具辅助临床记录。在进行任何录音之前，我们希望清楚说明该软件的工作方式以及您的信息将如何处理。</p><p><b>1. 录音。</b>在取得您同意的前提下，咨询师可能会在咨询过程中录音，其唯一目的是生成临床记录。您可以随时以口头或书面方式撤回同意，且不会影响您的咨询服务。</p><p><b>2. 您的数据如何处理。</b>本软件完全在本机离线运行：录音在本咨询师的电脑上录制和处理，如同一台数字录音机；任何音频、转写稿或记录都不会上传至互联网或存储在任何外部服务器上；软件运行不需要联网；软件开发者在任何情况下都无法访问您的数据；您的信息不会被用于训练任何 AI 模型，不会与任何第三方共享，也不会被出售。录音与转写稿会在咨询师的电脑上保留至记录生成完成，之后按咨询师的设置删除，或应您的要求删除。</p><p><b>3. AI 的作用。</b>咨询结束后，咨询师可能使用该软件根据转写稿在本机生成临床记录草稿。该草稿会由咨询师审核、修改并定稿后才成为临床记录的一部分。AI 不做临床决策——您的咨询师对所有记录负全部责任。</p><p><b>4. 您的权利。</b>您有权查阅您的记录，并可随时询问录音事宜。如果您不希望被录音，咨询师将改为手写记录。</p><div class="sig">来访者签字：<span></span> 日期：<span></span></div><div class="sig">咨询师签字：<span></span> 日期：<span></span></div><p class="muted">咨询师：${esc(p)} ${pr?'· '+esc(pr):''}</p></div>`;
+ return `<div class="consent-doc"><h3>Informed Consent for Audio Recording and Computer-Generated Notes</h3><p>Please read carefully and sign below.</p><p>Your therapist uses a software tool that assists with clinical documentation and runs locally on your therapist's own computer. Before any recording takes place, we want to explain clearly how this software works and what happens to your information.</p><p><b>1. Audio recording.</b> With your consent, your therapist may record audio during your sessions for the sole purpose of generating clinical notes. You may withdraw this consent at any time, verbally or in writing, without any effect on your care.</p><p><b>2. How your data is handled.</b> This is a fully local, offline application: your session audio is recorded and processed entirely on your therapist's computer — like a digital recorder. No audio, transcript, or note is ever uploaded to the internet or stored on any external server. The software does not require an internet connection to function. The software developer has no access to your data — at any time, under any circumstances. Your information is not used to train any AI model, is not shared with any third party, and is not sold. Audio recordings and transcripts are kept on your therapist's device only until the clinical note has been generated, and are then deleted according to your therapist's settings, or sooner upon your request.</p><p><b>3. What the AI does.</b> After a session, your therapist may use the software to generate a draft clinical note from a transcript of the session, locally on the device. The AI-generated note is reviewed, edited, and finalized by your therapist before it becomes part of your clinical record. The AI does not make clinical decisions — your therapist remains fully responsible for all documentation.</p><p><b>4. Your rights.</b> You may ask questions about the recording at any time, and you may decline recording; your therapist will take handwritten notes instead.</p><div class="sig">Client signature: <span></span> Date: <span></span></div><div class="sig">Therapist signature: <span></span> Date: <span></span></div><p class="muted">Therapist: ${esc(p)} ${pr?'· '+esc(pr):''}</p></div>`}
+function renderConsent(){consentBody.innerHTML=consentHtml(consentLang);consentEnBtn.style.fontWeight=consentLang==='en'?'800':'';consentZhBtn.style.fontWeight=consentLang==='zh'?'800':''}
+function printConsent(){printHtml(consentHtml(consentLang))}
+// ================= Security: auto-lock, users, password, audit =================
+let lastActivityTs=Date.now();
+['pointerdown','keydown','wheel','touchstart'].forEach(ev=>window.addEventListener(ev,()=>{lastActivityTs=Date.now()},{passive:true}));
+setInterval(()=>{if(!currentAuthUser)return;let mins=10;try{const v=window.desktopDB.getPref('autoLockMinutes');if(v!=null&&v!=='')mins=Number(v)}catch(_){}if(mins>0&&Date.now()-lastActivityTs>mins*60000){lockWorkspace();toast(t('lockedAutoToast'))}},20000);
+function setAutoLock(v){try{window.desktopDB.setPref('autoLockMinutes',String(v))}catch(_){}lastActivityTs=Date.now();toast(v==='0'?t('autoLockOffToast'):t('autoLockSet').replace('{m}',v))}
+async function renderSecurity(){const sel=document.getElementById('autoLockSel');if(sel){let v='10';try{const p=window.desktopDB.getPref('autoLockMinutes');if(p!=null&&p!=='')v=String(p)}catch(_){}sel.value=v}
+ const panel=document.getElementById('usersPanel');if(!panel)return;const me=currentAuthUser||{};
+ let users=[];let adminErr='';try{users=await window.desktopDB.usersList()}catch(e){adminErr=String(e&&e.message||e)}
+ if(adminErr||!users.length){panel.innerHTML=`<div class="muted">${t('signedInAs').replace('{name}',esc(me.displayName||me.username||'')).replace('{role}',esc(me.role||''))} ${adminErr?t('adminOnlyNote'):''}</div>`;return}
+ const isAdmin=me.role==='Admin';
+ panel.innerHTML=users.map(u=>`<div class="between row" style="padding:6px 0;border-bottom:1px solid var(--line)"><div><b>${esc(u.display_name||u.displayName||u.username)}</b> <span class="muted">@${esc(u.username)}</span> <span class="pill">${esc(u.role||'')}</span> ${u.active?'<span class="pill">'+t('activePill')+'</span>':'<span class="pill">'+t('disabledPill')+'</span>'}${me.id===u.id?' <span class="muted">'+t('youSuffix')+'</span>':''}</div>${isAdmin&&me.id!==u.id?`<button class="secondary" onclick="toggleUserActive('${u.id}',${u.active?'false':'true'})">${u.active?t('disableBtn'):t('enableBtn')}</button>`:''}</div>`).join('')+(isAdmin?`<div class="row" style="margin-top:10px"><input id="nuUsername" placeholder="${t('usernamePh')}" style="width:150px"><input id="nuDisplay" placeholder="${t('displayNamePh')}" style="width:170px"><input id="nuPassword" type="password" placeholder="${t('passwordPh')}" style="width:210px"><select id="nuRole" style="width:140px"><option value="Clinician">${t('roleClinician')}</option><option value="Admin">${t('roleAdmin')}</option></select><button class="secondary" onclick="submitAddUser()">${t('addUser')}</button></div><p class="muted">${t('ownAccountNote')}</p>`:'')}
+async function submitAddUser(){const u=nuUsername.value.trim(),d=nuDisplay.value.trim(),p=nuPassword.value;if(u.length<2)return alert(t('usernameShort'));if(p.length<10)return alert(t('pwTooShort'));try{const r=await window.desktopDB.usersCreate({username:u,displayName:d,password:p,role:nuRole.value});if(r&&r.ok===false)return alert(r.error||t('createUserFail'));toast(t('userCreated'));renderSecurity()}catch(e){alert(t('createUserFailPrefix')+(e&&e.message||e))}}
+async function toggleUserActive(id,active){try{const r=await window.desktopDB.usersSetActive({id,active});if(r&&r.ok===false)return alert(r.error||t('updateUserFail'));renderSecurity()}catch(e){alert(t('updateUserFailPrefix')+(e&&e.message||e))}}
+async function submitChangePassword(){const cur=pwCurrent.value,nw=pwNew.value;if(nw.length<10)return alert(t('pwTooShort'));try{const r=await window.desktopDB.changePassword({currentPassword:cur,newPassword:nw});if(r&&r.ok===false)return alert(r.error||t('changePwFail'));pwCurrent.value='';pwNew.value='';toast(t('pwChanged'))}catch(e){alert(t('changePwFailPrefix')+(e&&e.message||e))}}
+async function loadAuditLog(){const wrap=document.getElementById('auditWrap');try{const rows=await window.desktopDB.auditList(100);wrap.innerHTML=rows.length?`<table><tr><th>${t('auditThTime')}</th><th>${t('auditThUser')}</th><th>${t('auditThAction')}</th><th>${t('auditThObject')}</th><th>${t('auditThResult')}</th></tr>${rows.map(x=>`<tr><td>${esc(String(x.ts||'').replace('T',' ').slice(0,19))}</td><td>${esc(x.username||'')}</td><td>${esc(x.action||'')}</td><td>${esc(x.object_type||'')}</td><td>${esc(x.result||'')}</td></tr>`).join('')}</table>`:('<div class="empty">'+t('noAuditEntries')+'</div>')}catch(e){wrap.innerHTML='<div class="muted">'+t('auditLoadFail')+'</div>'}}
+async function verifyAuditLog(){const st=document.getElementById('auditStatus');try{const r=await window.desktopDB.auditVerify();st.textContent=r&&r.ok?t('auditOkTxt'):t('auditFailTxt');st.style.color=r&&r.ok?'':'#a13b3b'}catch(e){st.textContent=t('auditVerifyFail')}}
+function auditNoteAction(action,detail){try{window.desktopDB.auditEvent({action,objectType:'Note',objectId:(typeof nId!=='undefined'&&nId&&nId.value)||'',detail:detail||''})}catch(_){}}
+
+// ================= init =================
+document.getElementById('setupAdminButton').addEventListener('click',setupFirstUser);
+document.getElementById('loginButton').addEventListener('click',unlockWorkspace);
+initAuth();
+
+</script>
+</body>
+</html>

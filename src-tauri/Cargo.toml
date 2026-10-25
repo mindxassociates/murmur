@@ -1,0 +1,35 @@
+[package]
+name = "murmur"
+version = "1.3.0"
+description = "Murmur"
+authors = ["Mind X Associates"]
+edition = "2021"
+
+[lib]
+name = "murmur_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2" }
+
+[dependencies]
+tauri = { version = "2" }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+rusqlite = { version = "0.40.1", features = ["bundled-sqlcipher-vendored-openssl", "backup"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+rand = "0.9"
+hex = "0.4"
+sha2 = "0.10"
+hmac = "0.12"
+scrypt = "0.11"
+aes-gcm = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+subtle = "2"
+ureq = { version = "2", default-features = false, features = ["native-tls", "gzip"] }
+native-tls = "0.2"
+zip = "2"
+base64 = "0.22"
