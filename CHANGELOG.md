@@ -1,5 +1,13 @@
 # Changelog — Murmur
 
+## V1.5.0 — 2026-10-25 (clinical language corpus)
+
+- **Built-in clinical language corpus**: Murmur now carries a corpus of standard progress-note phrasing patterns (58 frames across presentation, assessment/progress, general interventions, per-modality interventions, client response, and plan), distilled from professional documentation references. See `CORPUS.md`.
+- **Standard register**: generated notes now phrase toward standard progress-note register — third person, past tense, formal clinical verbs (assisted, explored, facilitated, processed, reinforced, validated, normalized, challenged, provided psychoeducation) — filling the frames' slots from the session material.
+- **Modality-matched intervention language**: the intervention frames follow the Orientation / style field (DBT, motivational interviewing, psychodynamic, trauma-focused, addiction, CBT, behavioral, family/systems; supportive/person-centered by default), matched in English or Chinese.
+- **Content stays source-bound**: corpus phrasing is used only where the session content supports it — the prompt explicitly forbids adding interventions, symptoms, risk statements, or progress that the transcript or summary does not support.
+- **Both generation modes, all platforms**: the corpus is part of the generation prompt for recording/transcript mode and brief-summary mode alike, on desktop and Android. The clinician's custom template remains the highest-priority instruction, ahead of the corpus.
+
 ## V1.4.0 — 2026-10-25 (Android)
 
 - **Android support (arm64)**: Murmur now builds for Android with the same encrypted database, accounts, audit log, bilingual UI, and offline AI. See `ANDROID.md`.

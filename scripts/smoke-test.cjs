@@ -156,6 +156,18 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('prompt instructs output in chosen language (Español)', lastPrompt.includes('Español'));
   check('prompt specifies SOAP JSON keys', lastPrompt.includes('"subjective"') && lastPrompt.includes('"objective"') && lastPrompt.includes('"plan"'));
   check('prompt is ChatML + JSON-only', lastPrompt.includes('<|im_start|>system') && lastPrompt.includes('JSON'));
+
+  // Clinical language corpus (V1.5.0): modality matching, default, ordering
+  check('corpus helper exists', typeof w.corpusGuidance === 'function');
+  $('aiOrientation').value = 'CBT';
+  const cbtPrompt = w.buildNotePrompt('Therapist: We reviewed the thought record together. Client: The work meeting went better than I expected.', 'transcript');
+  check('corpus: CBT orientation prompt carries a CBT frame (Socratic questioning)', cbtPrompt.includes('Socratic questioning'));
+  check('corpus: prompt carries the never-add-unsupported-content warning', cbtPrompt.includes('never add interventions, symptoms, risk statements, or progress'));
+  check('corpus: block appears before the custom-template block', cbtPrompt.indexOf('CLINICAL LANGUAGE CORPUS') >= 0 && cbtPrompt.indexOf('CLINICAL LANGUAGE CORPUS') < cbtPrompt.indexOf('CUSTOM TEMPLATE'));
+  $('aiOrientation').value = '';
+  const defaultPrompt = w.buildNotePrompt('Client reported poor sleep and work stress.', 'brief');
+  check('corpus: no orientation falls back to supportive frames', defaultPrompt.includes('unconditional positive regard'));
+  $('aiOrientation').value = '';
   await w.aiPollOnce(); await w.aiPollOnce();
   const subj = w.document.querySelector('textarea[data-seckey="subjective"]');
   check('generated JSON parsed into SOAP section editor', subj && subj.value.includes('poor sleep'));
@@ -262,7 +274,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   // Standing rules: no third-party product names in the UI, no localStorage business data
   check('no borrowed-product names appear in UI/docs strings', !new RegExp(['Confi','dant'].join('') + '|' + ['Open','Evidence'].join(''), 'i').test(html));
   check('no localStorage used', !/localStorage/.test(html));
-  check('version V1.4.0 in UI', html.includes('Desktop V1.4.0'));
+  check('version V1.5.0 in UI', html.includes('Desktop V1.5.0'));
 
   // Delete flows
   const noteId = savedState().sessions[0].id;
