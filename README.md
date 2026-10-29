@@ -2,7 +2,7 @@
 
 *Progress notes that never leave the room.*
 
-**Version 1.5.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
+**Version 1.7.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
 
 Murmur turns therapy sessions into progress notes without anything leaving the computer it runs on. Record a session (with the client's consent) or type a brief summary, transcribe and draft locally, review and edit, then save — the only network use in the whole product is the one-time download of the speech and language models you choose.
 
@@ -23,6 +23,7 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 - **Recording sources for in-person and telehealth**: *In-person · microphone* (pick any audio input device, including loopback devices such as Stereo Mix / VB-CABLE / BlackHole that carry call audio), or *Telehealth · microphone + system audio* — share the entire screen with system audio on and Murmur mixes your mic with the computer audio (the shared video is discarded immediately). Where direct system-audio capture is unavailable (notably macOS), the loopback-device route covers telehealth.
 - **Local transcription** with Whisper (whisper.cpp). Models: Base, Small, Medium, Large v3 Turbo — pick speed vs. accuracy.
 - **Transcription language**: Auto-detect plus 34 languages, including English, 中文 (Mandarin), 粤语 (Cantonese), Español, 日本語， 한국어, Français, Deutsch, Português, Русский, العربية, हिन्दी, Tiếng Việt, ไทย, and more.
+- **Transcription vocabulary**: give Whisper a list of terms to expect — medication names, proper names, technical vocabulary — and it recognizes them far more reliably. The selected client's name is added automatically; the combined list is passed to the engine as its initial prompt on every transcription.
 - **Editable transcript with speaker aids**: insert `Therapist:` / `Client:` markers, relabel the current line with one click, or auto-segment speakers as a starting point and correct the labels.
 - **Brief-summary mode**: no recording? Type a few sentences after the session and generate the same structured draft.
 - **Note format**: SOAP, DAP, BIRP, or Narrative.
@@ -30,6 +31,7 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 - **Orientation / style field**: e.g. CBT, person-centered, concise — fed into the draft.
 - **Custom template / instructions**: type or paste your own note template or natural-language instructions. It is saved on the device, applies to both recording and summary generation, and takes priority over the preset format wherever the two conflict.
 - **Local note drafting** with an on-device language model (llama.cpp; Qwen2.5 1.5B fast / 3B recommended). The result opens as an **unsaved draft** in the note editor — nothing is ever saved without your review.
+- **Verify note (faithfulness check)**: from the draft, one click runs a second pass of the same local model that compares the draft against its source (transcript or summary) and lists any factual statements the source does not support — each flag quotes the draft text and explains the problem, and can be dismissed. It is advisory only: the same model does the checking, so treat it as a second pair of eyes, not a guarantee. Verifying never changes the draft and is never required before saving.
 - **Cleanup options**: delete the recording right after transcription, and/or delete the transcript (and brief summary) once the note is saved.
 
 ### Notes
@@ -86,4 +88,4 @@ Murmur also runs on Android (arm64). The Android build bundles the AI engines in
 Murmur is developed by [Mind X Associates](https://mind.us) ([Mind X社区 — 中文](https://mind.us/zh)). The app itself carries the same credit in the sidebar; the link opens the developer site in your browser (the only external link the app allows).
 
 ## Version history
-See `CHANGELOG.md`. Current: **V1.5.0**.
+See `CHANGELOG.md`. Current: **V1.7.0**.

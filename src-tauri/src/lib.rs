@@ -405,13 +405,17 @@ fn spawn_proc(ai: &State<AiState>, kind: &str, mut cmd: std::process::Command) -
     Ok(true)
 }
 #[tauri::command]
-fn transcribe_start(state: State<AppState>, ai: State<AiState>, audio_path: String, model: String, lang: String) -> Result<bool, String> {
+fn transcribe_start(state: State<AppState>, ai: State<AiState>, audio_path: String, model: String, lang: String, prompt: Option<String>) -> Result<bool, String> {
     let (models, engines, _a) = ai_dirs(&state)?;
     let bin = resolve_engine(&state, &engines, "whisper").ok_or("Transcription engine (whisper-cli) not found. Download the engine in Models, or set a custom engine path.")?;
     let model_path = if let Some(f) = model.strip_prefix("custom:") { models.join(f) } else { model_file(&models, "whisper", &model).ok_or("Unknown model")?.1 };
     if !model_path.exists() { return Err("The selected model has not been downloaded".into()); }
     let mut cmd = std::process::Command::new(bin);
     cmd.arg("-m").arg(&model_path).arg("-f").arg(&audio_path).arg("-l").arg(if lang.is_empty() { "auto".to_string() } else { lang }).arg("--no-timestamps").arg("-pp").arg("-t").arg("4");
+    // Optional vocabulary bias: the client name + clinician-supplied terms,
+    // passed as whisper.cpp's initial prompt so names/medication/technical
+    // terms are recognized more reliably.
+    if let Some(p) = prompt { let p = p.trim(); if !p.is_empty() { cmd.arg("--prompt").arg(p); } }
     spawn_proc(&ai, "transcribe", cmd)
 }
 #[tauri::command]

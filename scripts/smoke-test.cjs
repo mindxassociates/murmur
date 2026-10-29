@@ -12,6 +12,7 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'u
 // ---- Fake Tauri backend (mirrors src-tauri/src/lib.rs command semantics) ----
 let workspaceJson = null;
 let aiProc = null, aiDiscarded = '', lastPrompt = '';
+let lastTranscribeArgs = null, verifyOutput = '[]';
 const prefs = new Map();
 const auditEvents = [];
 let user = null;
@@ -54,14 +55,14 @@ const fakeInvoke = async (cmd, args = {}) => {
     case 'audio_append': return true;
     case 'audio_finish': return { path: '/fake/ai-audio/a1.wav', bytes: 1234 };
     case 'audio_discard': aiDiscarded = args.path; return true;
-    case 'transcribe_start': aiProc = { kind: 'transcribe', n: 0 }; return true;
-    case 'generate_start': lastPrompt = args.prompt; aiProc = { kind: 'generate', n: 0 }; return true;
+    case 'transcribe_start': lastTranscribeArgs = args; aiProc = { kind: 'transcribe', n: 0 }; return true;
+    case 'generate_start': lastPrompt = args.prompt; aiProc = { kind: 'generate', n: 0, out: args.prompt.includes('VERIFY NOTE AGAINST SOURCE') ? verifyOutput : undefined }; return true;
     case 'ai_proc_poll': { if (!aiProc) return { active: false, kind: '', done: true, output: '', progress: -1 };
       aiProc.n++; if (aiProc.n < 2) return { active: true, kind: aiProc.kind, done: false, progress: 50, output: '' };
-      const kind = aiProc.kind; aiProc = null;
+      const kind = aiProc.kind; const customOut = aiProc.out; aiProc = null;
       const output = kind === 'transcribe'
         ? 'I have not been sleeping well and work stress is high.\nWe talked about my sleep routine today.'
-        : 'noise<|im_start|>assistant\n{"subjective":"Client reported poor sleep and high work stress","objective":"Client appeared tired but engaged","assessment":"Stress-related insomnia, mild improvement in coping","plan":"Wind-down routine nightly; review sleep next session"}<|im_end|>\nllama_print_timings: total';
+        : (customOut !== undefined ? customOut : 'noise<|im_start|>assistant\n{"subjective":"Client reported poor sleep and high work stress","objective":"Client appeared tired but engaged","assessment":"Stress-related insomnia, mild improvement in coping","plan":"Wind-down routine nightly; review sleep next session"}<|im_end|>\nllama_print_timings: total');
       return { active: false, kind, done: true, progress: 100, output }; }
     case 'ai_proc_cancel': aiProc = null; return true;
     case 'open_external': throw new Error('External links are disabled in this app');
@@ -127,9 +128,20 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   // Transcription flow (fake engine)
   w.eval("aiAudioPath='/fake/ai-audio/a1.wav'");
   $('aiClient').value = clientId;
+  // Transcription vocabulary (V1.7.0): client name + user terms bias Whisper
+  check('vocabulary field + builder exist', !!$('aiVocabulary') && typeof w.buildTranscriptionVocabulary === 'function');
+  $('aiVocabulary').value = 'sertraline, melatonin\nSertraline';
+  $('aiVocabulary').dispatchEvent(new w.Event('input', { bubbles: true }));
+  await tick(650); await flush();
+  check('vocabulary persisted in pref store (aiVocabulary)', w.desktopDB.getPref('aiVocabulary') === 'sertraline, melatonin\nSertraline');
+  check('effective vocabulary = client name first, terms deduped', w.buildTranscriptionVocabulary() === 'Test Client A, sertraline, melatonin');
+  $('aiVocabulary').value = Array.from({ length: 60 }, (_, i) => 'term' + i + 'xxxxxxxxxx').join(', ');
+  check('effective vocabulary capped at 400 chars', w.buildTranscriptionVocabulary().length <= 400);
+  $('aiVocabulary').value = 'sertraline, melatonin';
   await w.startTranscribe();
   await w.aiPollOnce(); await w.aiPollOnce();
   check('transcript filled from engine output', $('aiTranscript').value.includes('sleeping well'));
+  check('transcribe invocation received vocabulary prompt (client name + term)', !!lastTranscribeArgs && typeof lastTranscribeArgs.prompt === 'string' && lastTranscribeArgs.prompt.includes('Test Client A') && lastTranscribeArgs.prompt.includes('sertraline'));
   check('recording discarded after transcription (default on)', aiDiscarded === '/fake/ai-audio/a1.wav');
 
   // Speaker-segment aids
@@ -206,6 +218,26 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   const subj = w.document.querySelector('textarea[data-seckey="subjective"]');
   check('generated JSON parsed into SOAP section editor', subj && subj.value.includes('poor sleep'));
   check('note editor opened as unsaved draft', $('noteEditorWrap').style.display !== 'none' && savedState().sessions.length === 0);
+
+  // Verify note (V1.7.0): second-pass faithfulness check over the draft.
+  // The fake model distinguishes verification prompts by the marker
+  // 'VERIFY NOTE AGAINST SOURCE' and answers with the planted verifyOutput.
+  check('verify UI exists', typeof w.verifyNote === 'function' && !!$('verifyBtn') && !!$('verifyPanel'));
+  check('verify row shown for the AI draft', $('verifyWrap').style.display !== 'none');
+  verifyOutput = 'noise<|im_start|>assistant\n[{"quote":"mild improvement in coping","issue":"The source reports stress and poor sleep but never says coping has improved."}]<|im_end|>\nllama_print_timings: total';
+  const assessBefore = w.document.querySelector('textarea[data-seckey="assessment"]').value;
+  await w.verifyNote();
+  check('verify prompt carries the verification marker + the draft', lastPrompt.includes('VERIFY NOTE AGAINST SOURCE') && lastPrompt.includes('mild improvement in coping'));
+  await w.verifyPollOnce(); await w.verifyPollOnce();
+  check('verify panel lists the planted flag (quote + issue)', $('verifyPanel').innerHTML.includes('mild improvement in coping') && $('verifyPanel').innerHTML.includes('never says coping has improved'));
+  check('verification leaves the draft text unchanged', w.document.querySelector('textarea[data-seckey="assessment"]').value === assessBefore && subj.value.includes('poor sleep'));
+  const dismissBtn = [...$('verifyPanel').querySelectorAll('button')].find(b => (b.getAttribute('onclick') || '').includes('dismissVerifyFlag'));
+  check('flag has a dismiss button', !!dismissBtn);
+  dismissBtn.click(); await tick();
+  check('dismissing the flag removes it from the panel', !$('verifyPanel').innerHTML.includes('mild improvement in coping'));
+  verifyOutput = '[]';
+  await w.verifyNote(); await w.verifyPollOnce(); await w.verifyPollOnce();
+  check('clean verification shows the success line', $('verifyPanel').innerHTML.includes('No unsupported statements found'));
 
   // Save the note -> persisted, transcript auto-deleted per option
   await w.saveNote(); await flush();
@@ -308,7 +340,10 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   // Standing rules: no third-party product names in the UI, no localStorage business data
   check('no borrowed-product names appear in UI/docs strings', !new RegExp(['Confi','dant'].join('') + '|' + ['Open','Evidence'].join(''), 'i').test(html));
   check('no localStorage used', !/localStorage/.test(html));
-  check('version V1.6.0 in UI', html.includes('Desktop V1.6.0'));
+  const rustSrc = fs.readFileSync(path.join(__dirname, '..', 'src-tauri', 'src', 'lib.rs'), 'utf8');
+  check('rust: transcribe_start accepts an optional prompt parameter', /fn transcribe_start\([^)]*prompt: Option<String>/.test(rustSrc));
+  check('rust: whisper-cli invocation passes --prompt when a vocabulary is present', rustSrc.includes('arg("--prompt")'));
+  check('version V1.7.0 in UI', html.includes('Desktop V1.7.0'));
 
   // Delete flows
   const noteId = savedState().sessions[0].id;
