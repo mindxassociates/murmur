@@ -117,12 +117,27 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('client list renders', $('clientsTable').innerHTML.includes('Test Client A'));
   const clientId = st.clients[0].id;
 
+  // V1.8.0: builtin template seeding for the new formats (once, never resurrects)
+  check('new builtin format templates seeded once', ['girp', 'pirp', 'sirp'].every(f => savedState().templates.some(x => x.format === f && x.builtin)));
+  w.eval("db.templates=db.templates.filter(x=>x.format!=='girp')");
+  await w.persistWorkspace(); await flush();
+  w.seedNoteTemplates(); await flush();
+  check('deleted seeded template is not resurrected', !savedState().templates.some(x => x.format === 'girp'));
+  // V1.8.0: per-client treatment goals (default format exercised later)
+  w.openClient(clientId);
+  check('client dialog has goals + default format fields', !!$('cGoals') && !!$('cDefaultFormat'));
+  $('cGoals').value = 'Reduce panic episodes and rebuild a regular sleep routine.';
+  $('cDefaultFormat').value = '';
+  await w.saveClient(); await flush();
+  check('client treatment goals persisted', (savedState().clients[0].goals || '').includes('panic episodes'));
+
   // Studio controls
   w.showView('studio'); await tick(); await tick();
   check('studio shows downloaded whisper model', $('aiWhisperModel').value === 'small');
   check('transcription language list is full (30+)', $('aiLang').options.length >= 30);
   check('transcription languages include yue + auto + ar', [...$('aiLang').options].some(o => o.value === 'yue') && [...$('aiLang').options].some(o => o.value === 'auto') && [...$('aiLang').options].some(o => o.value === 'ar'));
   check('format selector has SOAP/DAP/BIRP/Narrative', ['soap', 'dap', 'birp', 'narrative'].every(v => [...$('aiFormat').options].some(o => o.value === v)));
+  check('format selector also has GIRP/PIRP/SIRP', ['girp', 'pirp', 'sirp'].every(v => [...$('aiFormat').options].some(o => o.value === v)));
   check('output language selector includes es/ja/ko/zh-TW', ['es', 'ja', 'ko', 'zh-TW', 'follow'].every(v => [...$('aiOutLang').options].some(o => o.value === v)));
 
   // Transcription flow (fake engine)
@@ -158,6 +173,34 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   await tick(650); await flush();
   check('custom template persisted in pref store', w.desktopDB.getPref('aiCustomTemplate') === CUSTOM);
   check('custom template status reports saved', $('aiCustomTplStatus').textContent.includes('Saved'));
+
+  // V1.8.0: detail level, treatment goals in prompt, MSE, GIRP/PIRP/SIRP prompts
+  check('detail level selector exists, defaulting to Standard', !!$('aiDetail') && $('aiDetail').value === 'standard');
+  w.desktopDB.setPref('aiDetailLevel', 'brief');
+  check('detail level BRIEF reaches the prompt', w.buildNotePrompt('Client reported poor sleep.', 'brief').includes('Detail level: BRIEF'));
+  w.desktopDB.setPref('aiDetailLevel', 'detailed');
+  check('detail level DETAILED reaches the prompt', w.buildNotePrompt('Client reported poor sleep.', 'brief').includes('Detail level: DETAILED'));
+  w.desktopDB.setPref('aiDetailLevel', 'standard');
+  const goalsPrompt = w.buildNotePrompt('Client reported poor sleep.', 'brief');
+  check('client treatment goals reach the prompt with the framing instruction', goalsPrompt.includes('Reduce panic episodes and rebuild a regular sleep routine') && goalsPrompt.includes('treatment goals'));
+  check('MSE panel + compose exist', !!$('msePanel') && typeof w.composeMse === 'function' && typeof w.mseAllNormal === 'function');
+  w.mseAllNormal();
+  const mseAll = w.composeMse();
+  check('MSE all-normal composes standard wording across domains', mseAll.includes('Appropriately groomed') && mseAll.includes('goal-directed') && mseAll.includes('oriented to person, place, time') && mseAll.includes('No suicidal or homicidal ideation'));
+  w.mseToggle('speech', 'Normal rate, rhythm, volume, and articulation; spontaneous and coherent');
+  w.mseToggle('speech', 'Pressured speech');
+  const mseChanged = w.composeMse();
+  check('MSE changed domain overrides the normal descriptor', mseChanged.includes('Pressured speech') && !mseChanged.includes('Normal rate, rhythm'));
+  const msePrompt = w.buildNotePrompt('Client reported poor sleep.', 'brief');
+  check('composed MSE reaches the generation prompt', msePrompt.includes('MENTAL STATUS EXAM') && msePrompt.includes('Pressured speech'));
+  $('aiFormat').value = 'girp';
+  const girpPrompt = w.buildNotePrompt('Client worked on a sleep routine.', 'brief');
+  check('GIRP prompt specifies goal/intervention/response/plan keys', girpPrompt.includes('"goal"') && girpPrompt.includes('"intervention"') && girpPrompt.includes('"response"') && girpPrompt.includes('"plan"'));
+  $('aiFormat').value = 'pirp';
+  check('PIRP prompt specifies the problem key', w.buildNotePrompt('Client worked on a sleep routine.', 'brief').includes('"problem"'));
+  $('aiFormat').value = 'sirp';
+  check('SIRP prompt specifies the situation key', w.buildNotePrompt('Client worked on a sleep routine.', 'brief').includes('"situation"'));
+  $('aiFormat').value = 'soap';
 
   // Generation: output language = Spanish, format = SOAP
   $('aiOutLang').value = 'es';
@@ -218,6 +261,12 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   const subj = w.document.querySelector('textarea[data-seckey="subjective"]');
   check('generated JSON parsed into SOAP section editor', subj && subj.value.includes('poor sleep'));
   check('note editor opened as unsaved draft', $('noteEditorWrap').style.display !== 'none' && savedState().sessions.length === 0);
+
+  // V1.8.0: the composed MSE is offered as a one-click insert into the draft
+  check('MSE insert offered for the AI draft', $('mseInsertWrap').style.display !== 'none');
+  w.insertMseIntoDraft();
+  const assessTa = w.document.querySelector('textarea[data-seckey="assessment"]');
+  check('MSE insert appends the composed paragraph to the assessment section', !!assessTa && assessTa.value.includes('Mental Status Exam:') && assessTa.value.includes('Pressured speech'));
 
   // Verify note (V1.7.0): second-pass faithfulness check over the draft.
   // The fake model distinguishes verification prompts by the marker
@@ -324,6 +373,12 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('manual note editor defaults to SOAP sections', !!w.document.querySelector('textarea[data-seckey="subjective"]'));
   $('nFormat').value = 'dap'; w.changeNoteFormat();
   check('switching format re-renders DAP sections', !!w.document.querySelector('textarea[data-seckey="data"]') && !w.document.querySelector('textarea[data-seckey="subjective"]'));
+  $('nFormat').value = 'girp'; w.changeNoteFormat();
+  check('switching format re-renders GIRP sections', !!w.document.querySelector('textarea[data-seckey="goal"]') && !!w.document.querySelector('textarea[data-seckey="intervention"]') && !!w.document.querySelector('textarea[data-seckey="response"]'));
+  $('nFormat').value = 'pirp'; w.changeNoteFormat();
+  check('switching format re-renders PIRP sections', !!w.document.querySelector('textarea[data-seckey="problem"]'));
+  $('nFormat').value = 'sirp'; w.changeNoteFormat();
+  check('switching format re-renders SIRP sections', !!w.document.querySelector('textarea[data-seckey="situation"]'));
   w.closeNoteEditor();
 
   // Consent forms (printable, EN + ZH)
@@ -343,12 +398,75 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   const rustSrc = fs.readFileSync(path.join(__dirname, '..', 'src-tauri', 'src', 'lib.rs'), 'utf8');
   check('rust: transcribe_start accepts an optional prompt parameter', /fn transcribe_start\([^)]*prompt: Option<String>/.test(rustSrc));
   check('rust: whisper-cli invocation passes --prompt when a vocabulary is present', rustSrc.includes('arg("--prompt")'));
-  check('version V1.7.0 in UI', html.includes('Desktop V1.7.0'));
+  check('version V1.8.0 in UI', html.includes('Desktop V1.8.0'));
+
+  // V1.8.0: client default format preselects in the Studio
+  w.openClient(clientId);
+  $('cDefaultFormat').value = 'dap';
+  await w.saveClient(); await flush();
+  check('client default format persisted', savedState().clients[0].defaultFormat === 'dap');
+  w.showView('studio');
+  $('aiClient').value = clientId; w.applyClientDefaults();
+  check('studio preselects the client default format', $('aiFormat').value === 'dap');
+  $('aiFormat').value = 'soap';
+  w.openClient(clientId); $('cDefaultFormat').value = ''; await w.saveClient(); await flush();
+
+  // V1.8.0: Home queue — lifecycle (add on transcription, dedupe, reload, save removes)
+  check('queue helpers exist', typeof w.getPendingNotes === 'function' && typeof w.writeAllQueue === 'function' && !!$('queueList'));
+  w.getPendingNotes().slice().forEach(p => w.removePendingNote(p.id)); await flush();
+  check('queue remove action empties the queue', w.getPendingNotes().length === 0);
+  w.showView('home'); await tick();
+  check('home queue empty state explains the queue', $('queueList').innerHTML.includes('Nothing waiting'));
+  w.showView('studio');
+  w.eval("aiAudioPath='/fake/ai-audio/a1.wav'");
+  $('aiClient').value = clientId;
+  await w.startTranscribe(); await w.aiPollOnce(); await w.aiPollOnce();
+  check('completed transcription adds a pending queue item', w.getPendingNotes().length === 1 && w.getPendingNotes()[0].kind === 'transcript');
+  const qItem = w.getPendingNotes()[0];
+  check('queue add dedupes identical client+source', w.addPendingNote(clientId, 'transcript', qItem.source, qItem.date) === qItem.id && w.getPendingNotes().length === 1);
+  await flush();
+  w.eval('pendingQueue=null'); w.renderHome();
+  check('queue survives a simulated reload (pref store)', w.getPendingNotes().length === 1 && $('queueList').innerHTML.includes('Test Client A'));
+  const sessionsBefore = savedState().sessions.length;
+  await w.writeNoteFromQueue(qItem.id); await tick();
+  check('queue Write note opens the draft editor', $('noteEditorWrap').style.display !== 'none');
+  await w.saveNote(); await flush();
+  check('saving the queued note removes its queue item', w.getPendingNotes().length === 0 && savedState().sessions.length === sessionsBefore + 1);
+  // Write all: two queued items generate in order; drafts step through on save
+  w.addPendingNote(clientId, 'brief', 'Brief one: client reported anxiety about an upcoming work review.', '2026-10-29');
+  w.addPendingNote(clientId, 'transcript', 'Transcript two: client discussed poor sleep and stress at length.', '2026-10-29');
+  await flush();
+  check('two items queued for Write all', w.getPendingNotes().length === 2);
+  await w.writeAllQueue(); await tick();
+  check('Write all generates drafts and opens the first', $('noteEditorWrap').style.display !== 'none' && w.eval('writeAllDrafts').length === 1);
+  await w.saveNote(); await flush();
+  check('saving draft 1 removes its item and opens draft 2', w.getPendingNotes().length === 1 && $('noteEditorWrap').style.display !== 'none');
+  await w.saveNote(); await flush();
+  check('saving draft 2 empties the queue', w.getPendingNotes().length === 0 && savedState().sessions.length === sessionsBefore + 3);
+
+  // V1.8.0: global search over saved notes + pending queue
+  $('globalSearch').value = 'sleep'; w.renderSearch();
+  check('search finds a term in a saved note with highlighting', $('searchResults').innerHTML.includes('<mark>sleep</mark>') && $('searchResults').innerHTML.includes('Test Client A'));
+  w.addPendingNote(clientId, 'brief', 'Client mentioned insomnia and early waking.', '2026-10-29'); await flush();
+  $('globalSearch').value = 'insomnia'; w.renderSearch();
+  check('search finds a pending queue item, labeled pending', $('searchResults').innerHTML.includes('<mark>insomnia</mark>') && $('searchResults').innerHTML.includes('Pending'));
+  $('globalSearch').value = ''; w.renderSearch();
+
+  // V1.8.0: dictation into the brief box (post-recording transcription step)
+  check('dictate button exists in Mode 2', !!$('dictateBtn') && typeof w.startDictation === 'function' && typeof w.startTranscribeTo === 'function');
+  w.eval("aiAudioPath='/fake/ai-audio/a1.wav'");
+  $('aiBrief').value = '';
+  await w.startTranscribeTo('brief'); await w.aiPollOnce(); await w.aiPollOnce();
+  check('dictation transcription lands in the brief box', $('aiBrief').value.includes('sleeping well'));
+  check('dictation target resets to transcript afterwards', w.eval('transcribeTarget') === 'transcript');
+  check('dictation transcription does not add a queue item', w.getPendingNotes().length === 1);
+  w.getPendingNotes().slice().forEach(p => w.removePendingNote(p.id)); await flush();
 
   // Delete flows
   const noteId = savedState().sessions[0].id;
+  const preDeleteCount = savedState().sessions.length;
   await w.deleteNote(noteId); await flush();
-  check('note deleted', savedState().sessions.length === 1);
+  check('note deleted', savedState().sessions.length === preDeleteCount - 1);
   await w.deleteClientForever(clientId); await flush();
   st = savedState();
   check('client delete cascades to notes', st.clients.length === 0 && st.sessions.length === 0);

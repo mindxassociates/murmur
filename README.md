@@ -2,7 +2,7 @@
 
 *Progress notes that never leave the room.*
 
-**Version 1.7.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
+**Version 1.8.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
 
 Murmur turns therapy sessions into progress notes without anything leaving the computer it runs on. Record a session (with the client's consent) or type a brief summary, transcribe and draft locally, review and edit, then save — the only network use in the whole product is the one-time download of the speech and language models you choose.
 
@@ -14,9 +14,15 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 
 ## Features
 
+### Home
+- **Sessions awaiting notes**: every finished transcription — and every summary you generate from — lands in a queue on the Home view. An item stays there until its note is actually **saved** (drafts are still never auto-saved), so nothing falls through the cracks between sessions.
+- **Write all**: generate drafts for the whole queue in one run, then review them one at a time in the editor.
+- **Global search**: one box searches the text of every saved note plus the pending queue's source material, with the matched term highlighted; pending items are labeled as such.
+
 ### Clients
 - Simple local client list: add, edit, delete (deleting a client also deletes their saved notes).
 - Use real names, initials, or code names — it never leaves the device.
+- **Per-client treatment goals and default format**: record each client's treatment goals and, if you like, their default note format. Selecting the client in AI Studio preselects their format, and generated drafts frame assessment and progress relative to the goals — only where the session source supports it.
 
 ### AI Studio
 - **Ambient recording** in the app (consent checkbox required before the microphone opens), or **import an audio file**.
@@ -25,8 +31,10 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 - **Transcription language**: Auto-detect plus 34 languages, including English, 中文 (Mandarin), 粤语 (Cantonese), Español, 日本語， 한국어, Français, Deutsch, Português, Русский, العربية, हिन्दी, Tiếng Việt, ไทย, and more.
 - **Transcription vocabulary**: give Whisper a list of terms to expect — medication names, proper names, technical vocabulary — and it recognizes them far more reliably. The selected client's name is added automatically; the combined list is passed to the engine as its initial prompt on every transcription.
 - **Editable transcript with speaker aids**: insert `Therapist:` / `Client:` markers, relabel the current line with one click, or auto-segment speakers as a starting point and correct the labels.
-- **Brief-summary mode**: no recording? Type a few sentences after the session and generate the same structured draft.
-- **Note format**: SOAP, DAP, BIRP, or Narrative.
+- **Brief-summary mode**: no recording? Type a few sentences after the session and generate the same structured draft — or **dictate** them: the Dictate button records your voice alone (microphone only, no client present) and drops the transcription into the summary box for editing.
+- **Mental Status Exam quick entry**: a tappable 11-domain MSE panel (appearance through judgment) with standard clinical descriptors, an "All normal" shortcut, and a free-text note per domain. The composed paragraph steers generation as clinician-observed fact, and can be inserted into the draft with one click.
+- **Note format**: SOAP, DAP, BIRP, GIRP, PIRP, SIRP, or Narrative.
+- **Detail level**: Brief / Standard / Detailed — controls how long and deep the drafted note runs.
 - **Output language — your choice, independent of the session language**: follow the transcript, or write the note in English, 简体中文， 繁體中文， Español, 日本語， 한국어, Français, Deutsch, or Português.
 - **Orientation / style field**: e.g. CBT, person-centered, concise — fed into the draft.
 - **Custom template / instructions**: type or paste your own note template or natural-language instructions. It is saved on the device, applies to both recording and summary generation, and takes priority over the preset format wherever the two conflict.
@@ -88,4 +96,4 @@ Murmur also runs on Android (arm64). The Android build bundles the AI engines in
 Murmur is developed by [Mind X Associates](https://mind.us) ([Mind X社区 — 中文](https://mind.us/zh)). The app itself carries the same credit in the sidebar; the link opens the developer site in your browser (the only external link the app allows).
 
 ## Version history
-See `CHANGELOG.md`. Current: **V1.7.0**.
+See `CHANGELOG.md`. Current: **V1.8.0**.

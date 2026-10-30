@@ -1,4 +1,4 @@
-# Start Here — Murmur V1.7.0
+# Start Here — Murmur V1.8.0
 
 ## Build the app (first time)
 
@@ -23,6 +23,10 @@ Everything after the model downloads works fully offline.
 - **Phrase library / My phrases**: in the note editor, open the phrase library to insert standard corpus phrasing (including problem-focused sets) with one click. Star (☆) the phrases you use most, or add your own — they stay pinned under **★ My phrases**, and generated notes prefer them where they fit.
 - **Transcription vocabulary**: list medication names, proper names, and technical terms in AI Studio (the client's name is added automatically) so Whisper spells them correctly the first time.
 - **Verify note**: with an AI draft open, click **Verify note** to have the same local model re-check the draft against its source and flag statements the source does not support. Advisory only — review the flags yourself; the draft is never changed automatically.
+- **Home queue**: finished transcriptions and generated-from summaries wait under **Home → Sessions awaiting notes** until their note is saved. **Write all** drafts the whole queue in one run for one-by-one review; the search box on Home searches saved notes and pending items together.
+- **Mental Status Exam**: tap through the 11-domain MSE panel in AI Studio (use **All normal** for the routine case); the composed paragraph guides generation and can be inserted into the draft from the note editor.
+- **Client goals & default format**: set them on the client record — the Studio preselects the client's format, and drafts frame progress against the goals where the source supports it. **Detail level** (Brief / Standard / Detailed) sits next to the format selector.
+- **Dictate a summary**: in Mode 2, **Dictate** records your own voice and transcribes it straight into the summary box.
 - Tick **Delete transcript after the note is saved** if you want the working text wiped as soon as the note is stored.
 
 ## Run the frontend smoke test (developers)

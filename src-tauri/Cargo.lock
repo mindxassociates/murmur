@@ -2328,6 +2328,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "murmur"
+version = "1.8.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "hmac",
+ "native-tls",
+ "rand",
+ "rusqlite",
+ "scrypt",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "thiserror 2.0.21",
+ "ureq",
+ "uuid",
+ "zip",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4215,33 +4242,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fed54709c5b3a53d09bb1c113ea4f5ceafd1e772ddcb0030a82e1d56c087b08"
 dependencies = [
  "new_debug_unreachable",
-]
-
-[[package]]
-name = "murmur"
-version = "1.7.0"
-dependencies = [
- "aes-gcm",
- "base64 0.22.1",
- "chrono",
- "hex",
- "hmac",
- "native-tls",
- "rand",
- "rusqlite",
- "scrypt",
- "serde",
- "serde_json",
- "sha2",
- "subtle",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "thiserror 2.0.21",
- "ureq",
- "uuid",
- "zip",
 ]
 
 [[package]]
