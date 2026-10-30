@@ -36,6 +36,7 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 - **Transcription language**: Auto-detect plus 34 languages, including English, 中文 (Mandarin), 粤语 (Cantonese), Español, 日本語， 한국어, Français, Deutsch, Português, Русский, العربية, हिन्दी, Tiếng Việt, ไทย, and more.
 - **Transcription vocabulary**: give Whisper a list of terms to expect — medication names, proper names, technical vocabulary — and it recognizes them far more reliably. The selected client's name is added automatically; the combined list is passed to the engine as its initial prompt on every transcription.
 - **Editable transcript with speaker aids**: insert `Therapist:` / `Client:` markers, relabel the current line with one click, or auto-segment speakers as a starting point and correct the labels.
+- **Speaker separation with voice enrollment**: after transcription, an optional offline pass groups the session recording by voice and rewrites the transcript with `Therapist:` / `Client:` labels (extra voices become Client 2, Speaker 3, …). A 25–30 second sample of the clinician's own voice, recorded once in Models & Settings, identifies which speaker is the therapist; without a sample, a one-click **This is me** correction uses a sample line from each speaker. The original unlabeled transcript stays one toggle away.
 - **Brief-summary mode**: no recording? Type a few sentences after the session and generate the same structured draft — or **dictate** them: the Dictate button records your voice alone (microphone only, no client present) and drops the transcription into the summary box for editing.
 - **Mental Status Exam quick entry**: a tappable 11-domain MSE panel (appearance through judgment) with standard clinical descriptors, an "All normal" shortcut, and a free-text note per domain. The composed paragraph steers generation as clinician-observed fact, and can be inserted into the draft with one click.
 - **Note format**: SOAP, DAP, BIRP, GIRP, PIRP, SIRP, or Narrative.
@@ -108,4 +109,4 @@ Murmur also runs on Android (arm64). The Android build bundles the AI engines in
 Murmur is developed by [Mind X Associates](https://mind.us) ([Mind X社区 — 中文](https://mind.us/zh)). The app itself carries the same credit in the sidebar; the link opens the developer site in your browser (the only external link the app allows).
 
 ## Version history
-See `CHANGELOG.md`. Current: **V1.11.0**.
+See `CHANGELOG.md`. Current: **V1.12.0**.

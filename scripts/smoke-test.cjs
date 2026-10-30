@@ -13,6 +13,7 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'u
 let workspaceJson = null;
 let aiProc = null, aiDiscarded = '', lastPrompt = '';
 let lastTranscribeArgs = null, verifyOutput = '[]';
+let lastDiarizeArgs = null; const discardLog = [];
 const prefs = new Map();
 const auditEvents = [];
 let user = null;
@@ -39,13 +40,15 @@ const fakeInvoke = async (cmd, args = {}) => {
     case 'users_set_active': return { ok: true };
     case 'change_password': return { ok: true };
     case 'open_path': return true;
-    case 'ai_status': return { whisper: { found: true, path: '/fake/whisper-cli' }, llama: { found: true, path: '/fake/llama-cli' }, models: [
+    case 'ai_status': return { whisper: { found: true, path: '/fake/whisper-cli' }, llama: { found: true, path: '/fake/llama-cli' }, diarize: { found: true, path: '/fake/sherpa-onnx-offline-speaker-diarization' }, models: [
       { id: 'base', kind: 'whisper', label: 'Base', file: 'ggml-base.bin', downloaded: false, bytes: 0 },
       { id: 'small', kind: 'whisper', label: 'Small', file: 'ggml-small.bin', downloaded: true, bytes: 487601967 },
       { id: 'medium', kind: 'whisper', label: 'Medium', file: 'ggml-medium.bin', downloaded: false, bytes: 0 },
       { id: 'turbo', kind: 'whisper', label: 'Large v3 Turbo', file: 'ggml-large-v3-turbo.bin', downloaded: false, bytes: 0 },
       { id: 'qwen15', kind: 'llm', label: 'Qwen2.5 1.5B', file: 'qwen2.5-1.5b-instruct-q4_k_m.gguf', downloaded: false, bytes: 0 },
-      { id: 'qwen3', kind: 'llm', label: 'Qwen2.5 3B', file: 'qwen2.5-3b-instruct-q4_k_m.gguf', downloaded: true, bytes: 2104049000 } ],
+      { id: 'qwen3', kind: 'llm', label: 'Qwen2.5 3B', file: 'qwen2.5-3b-instruct-q4_k_m.gguf', downloaded: true, bytes: 2104049000 },
+      { id: 'seg', kind: 'diarize', label: 'Speaker segmentation model', file: 'diarize-segmentation.onnx', downloaded: true, bytes: 5992913 },
+      { id: 'emb', kind: 'diarize', label: 'Speaker embedding model', file: 'diarize-embedding.onnx', downloaded: true, bytes: 39593761 } ],
       modelsDir: '/fake/ai-models', enginesDir: '/fake/ai-engines', os: 'windows', download: null, proc: null };
     case 'ai_download': return true;
     case 'ai_download_cancel': return true;
@@ -54,14 +57,20 @@ const fakeInvoke = async (cmd, args = {}) => {
     case 'audio_begin': return { id: 'a1', path: '/fake/ai-audio/a1.wav' };
     case 'audio_append': return true;
     case 'audio_finish': return { path: '/fake/ai-audio/a1.wav', bytes: 1234 };
-    case 'audio_discard': aiDiscarded = args.path; return true;
+    case 'audio_discard': aiDiscarded = args.path; discardLog.push(args.path); return true;
     case 'transcribe_start': lastTranscribeArgs = args; aiProc = { kind: 'transcribe', n: 0 }; return true;
+    case 'diarize_start': lastDiarizeArgs = args; aiProc = { kind: 'diarize', n: 0, combined: !!args.enrollPath }; return { input: args.enrollPath ? '/fake/ai-audio/diarize-combined.wav' : args.audioPath, combined: !!args.enrollPath };
     case 'generate_start': lastPrompt = args.prompt; aiProc = { kind: 'generate', n: 0, out: args.prompt.includes('VERIFY NOTE AGAINST SOURCE') ? verifyOutput : undefined }; return true;
     case 'ai_proc_poll': { if (!aiProc) return { active: false, kind: '', done: true, output: '', progress: -1 };
       aiProc.n++; if (aiProc.n < 2) return { active: true, kind: aiProc.kind, done: false, progress: 50, output: '' };
-      const kind = aiProc.kind; const customOut = aiProc.out; aiProc = null;
-      const output = kind === 'transcribe'
-        ? 'I have not been sleeping well and work stress is high.\nWe talked about my sleep routine today.'
+      const kind = aiProc.kind; const customOut = aiProc.out; const aiProcCombined = !!aiProc.combined; aiProc = null;
+      const output = kind === 'diarize'
+        ? (aiProcCombined ? 'Started\n0.500 -- 27.500 speaker_00\n30.000 -- 34.000 speaker_00\n35.000 -- 39.000 speaker_01\n40.000 -- 44.000 speaker_00\n45.000 -- 49.000 speaker_01'
+          : 'Started\n1.000 -- 5.000 speaker_01\n6.000 -- 10.000 speaker_00\n11.000 -- 15.000 speaker_01\n16.000 -- 20.000 speaker_00')
+        : kind === 'transcribe'
+        ? (lastTranscribeArgs && lastTranscribeArgs.timestamps
+          ? '[00:00:01.000 --> 00:00:05.000]  I have not been sleeping well and work stress is high.\n[00:00:06.000 --> 00:00:10.000]  We talked about your sleep routine today.\n[00:00:11.000 --> 00:00:15.000]  I tried the wind-down routine twice this week.\n[00:00:16.000 --> 00:00:20.000]  That is good progress. Let us keep it going.'
+          : 'I have not been sleeping well and work stress is high.\nWe talked about my sleep routine today.')
         : (customOut !== undefined ? customOut : 'noise<|im_start|>assistant\n{"subjective":"Client reported poor sleep and high work stress","objective":"Client appeared tired but engaged","assessment":"Stress-related insomnia, mild improvement in coping","plan":"Wind-down routine nightly; review sleep next session"}<|im_end|>\nllama_print_timings: total');
       return { active: false, kind, done: true, progress: 100, output }; }
     case 'ai_proc_cancel': aiProc = null; return true;
@@ -427,7 +436,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('rust: deprecated whisper main binary is not a candidate', !rustSrc.includes('"main.exe"') && !rustSrc.includes('"main"'));
   check('rust: whisper-cli.exe is the Windows whisper candidate', rustSrc.includes('&["whisper-cli.exe"]'));
   check('rust: engine search honors strict candidate priority', rustSrc.includes('for name in names'));
-  check('version V1.11.0 in UI', html.includes('Desktop V1.11.0'));
+  check('version V1.12.0 in UI', html.includes('Desktop V1.12.0'));
 
   // V1.8.0: client default format preselects in the Studio
   w.openClient(clientId);
@@ -700,6 +709,71 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   await w.deleteClientForever(wizClient.id); await w.desktopDB.flush();
   await w.deleteClientForever(sample1.id); await w.desktopDB.flush();
   check('V1.11 wizard + sample clients deletable (cleanup path)', savedState().clients.filter(c => c.name === 'Wizard Client' || c.name === 'Sample Client — Demo').length === 0);
+
+
+  // V1.12.0: speaker separation + therapist voice enrollment
+  w.showView('models'); await tick();
+  check('V1.12 models: speaker separation engine row rendered', $('modelsBody').innerHTML.includes('Speaker separation engine'));
+  check('V1.12 models: both speaker model files listed', $('modelsBody').innerHTML.includes('diarize-segmentation.onnx') && $('modelsBody').innerHTML.includes('diarize-embedding.onnx'));
+  check('V1.12 enrollment card exists with a record action', !!$('voiceCard') && $('voiceBody').innerHTML.includes('Record voice sample'));
+  await w.saveEnrollmentWav(new w.Uint8Array([82, 73, 70, 70]), 28); await tick();
+  check('V1.12 enrollment stores the wav path + duration prefs', w.desktopDB.getPref('aiVoicePath') === '/fake/ai-audio/a1.wav' && w.desktopDB.getPref('aiVoiceDur') === '28');
+  w.renderVoiceCard();
+  check('V1.12 enrollment card shows enrolled state + duration', $('voiceBody').innerHTML.includes('Voice sample saved') && $('voiceBody').innerHTML.includes('28'));
+  // Studio flow WITH enrollment: the enrolled cluster becomes Therapist
+  w.showView('studio'); await tick();
+  $('aiClient').value = clientId;
+  const diaQ = w.addPendingNote(clientId, 'transcript', 'placeholder', '2026-10-30');
+  w.eval("aiAudioPath='/fake/ai-audio/a1.wav';diarizeData=null;studioSessionType='individual'");
+  $('aiTranscript').value = 'placeholder';
+  discardLog.length = 0;
+  await w.startDiarizeFlow(); await tick();
+  for (let i = 0; i < 8 && !w.eval('diarizeData'); i++) { await w.aiPollOnce(); await tick(40); }
+  check('V1.12 diarize stage 1 requested timestamped transcription', !!lastTranscribeArgs && lastTranscribeArgs.timestamps === true);
+  check('V1.12 diarize_start received enrollment path + known speaker count', !!lastDiarizeArgs && lastDiarizeArgs.enrollPath === '/fake/ai-audio/a1.wav' && lastDiarizeArgs.numSpeakers === 2);
+  const labeled = $('aiTranscript').value;
+  check('V1.12 enrolled cluster labeled Therapist, other labeled Client', labeled.includes('Therapist: I have not been sleeping well') && labeled.includes('Client: We talked about your sleep routine today.'));
+  check('V1.12 pending queue source updated to the labeled transcript', (w.getPendingNotes().find(p => p.id === diaQ) || {}).source === labeled);
+  check('V1.12 combined enrollment+session temp wav discarded after the run', discardLog.includes('/fake/ai-audio/diarize-combined.wav'));
+  check('V1.12 deferred delete-after-transcription still honored after diarization', w.eval('aiAudioPath') === '' && discardLog.includes('/fake/ai-audio/a1.wav'));
+  await w.generateNote('transcript'); await tick();
+  check('V1.12 labeled transcript reaches the generation prompt', lastPrompt.includes('Therapist: I have not been sleeping well') && lastPrompt.includes('Client: We talked about your sleep routine today.'));
+  w.toggleDiarizeOriginal();
+  check('V1.12 original toggle restores the unlabeled transcript', $('aiTranscript').value === 'placeholder');
+  w.toggleDiarizeOriginal();
+  check('V1.12 toggle back restores the labeled transcript', $('aiTranscript').value === labeled);
+  // Enrollment removed: generic Speaker labels + "This is me" correction
+  await w.deleteEnrollment(); await tick();
+  check('V1.12 enrollment delete clears the prefs', !w.desktopDB.getPref('aiVoicePath') && !w.desktopDB.getPref('aiVoiceDur'));
+  w.eval("aiAudioPath='/fake/ai-audio/a1.wav';diarizeData=null");
+  $('aiTranscript').value = 'raw session text';
+  await w.startDiarizeFlow(); await tick();
+  for (let i = 0; i < 8 && !w.eval('diarizeData'); i++) { await w.aiPollOnce(); await tick(40); }
+  check('V1.12 no-enrollment run passes no enrollment to the engine', !!lastDiarizeArgs && !lastDiarizeArgs.enrollPath);
+  check('V1.12 no-enrollment labels stay generic speakers', $('aiTranscript').value.includes('Speaker 1: I have not been sleeping well') && $('aiTranscript').value.includes('Speaker 2: We talked about'));
+  check('V1.12 correction panel offers This is me with sample lines', $('diarizePanel').innerHTML.includes('This is me') && $('diarizePanel').innerHTML.includes('sleeping well'));
+  w.markTherapist(1);
+  check('V1.12 This is me relabels in place (no engine re-run)', $('aiTranscript').value.includes('Therapist: I have not been sleeping well') && $('aiTranscript').value.includes('Client: We talked about'));
+  check('V1.12 This is me choice persists on the device', w.desktopDB.getPref('aiVoiceCluster') === '1');
+  // Missing setup explains itself and routes to Models & Settings
+  w.eval("aiStatusCache={os:'windows',whisper:{found:true,path:'/fake/whisper-cli'},llama:{found:true,path:'/fake/llama-cli'},diarize:{found:false,path:''},models:[],modelsDir:'/fake',enginesDir:'/fake',download:null,proc:null}");
+  check('V1.12 missing engine reported by setup state', w.diarizeSetupState().ok === false && w.diarizeSetupState().missing.includes('engine') && w.diarizeSetupState().missing.includes('models'));
+  w.showDiarizePanel();
+  check('V1.12 missing setup panel explains + routes to Models', $('diarizePanel').textContent.includes('speaker separation engine is not installed') && $('diarizePanel').textContent.includes('Open Models & Settings'));
+  // Android: the feature hides behind the desktop-engines pattern
+  w.eval("aiStatusCache={os:'android',whisper:{found:true,path:'x'},llama:{found:true,path:'x'},diarize:{found:false,path:''},models:[],modelsDir:'',enginesDir:'',download:null,proc:null}");
+  w.updateDiarizeUi();
+  check('V1.12 android: separate-speakers button hidden', $('aiDiarizeBtn').style.display === 'none');
+  check('V1.12 android: setup state reports the android gate', w.diarizeSetupState().android === true);
+  await w.refreshAiStatus(); await tick();
+  check('V1.12 desktop status restores the button', $('aiDiarizeBtn').style.display !== 'none');
+  // Rust-side static checks for the new plumbing
+  check('rust: diarize_start is attributed + registered', /#\[tauri::command\]\nfn diarize_start/.test(rustSrc) && rustSrc.includes('transcribe_start,diarize_start,generate_start'));
+  check('rust: diarize candidate names are the sherpa-onnx binaries', rustSrc.includes('"sherpa-onnx-offline-speaker-diarization.exe"') && rustSrc.includes('&["sherpa-onnx-offline-speaker-diarization"]'));
+  check('rust: engine pin is sherpa-onnx v2.0.1 (win MT no-tts + mac arch packages)', rustSrc.includes('sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts.tar.bz2') && rustSrc.includes('sherpa-onnx-v2.0.1-osx-'));
+  check('rust: speaker model pins recorded', rustSrc.includes('sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx') && rustSrc.includes('3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx'));
+  check('rust: tar.bz2 extraction + enrollment concat helpers present', rustSrc.includes('fn extract_tar_bz2') && rustSrc.includes('fn concat_wavs'));
+  check('rust: diarize flags match the engine CLI', rustSrc.includes('--segmentation.pyannote-model=') && rustSrc.includes('--embedding.model=') && rustSrc.includes('--clustering.num-clusters='));
 
 
   // Delete flows

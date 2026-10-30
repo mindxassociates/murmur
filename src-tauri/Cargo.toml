@@ -1,6 +1,6 @@
 [package]
 name = "murmur"
-version = "1.11.0"
+version = "1.12.0"
 description = "Murmur"
 authors = ["Mind X Associates"]
 edition = "2021"
@@ -32,4 +32,5 @@ subtle = "2"
 ureq = { version = "2", default-features = false, features = ["native-tls", "gzip"] }
 native-tls = "0.2"
 zip = "2"
+bzip2 = "0.5"
 base64 = "0.22"

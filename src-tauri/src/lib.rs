@@ -181,6 +181,11 @@ const LLM_MODELS: [(&str, &str, &str, &str); 2] = [
     ("qwen3", "Qwen2.5 3B (recommended, better quality)", "qwen2.5-3b-instruct-q4_k_m.gguf", "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"),
 ];
 
+const DIARIZE_MODELS: [(&str, &str, &str, &str); 2] = [
+    ("seg", "Speaker segmentation model", "diarize-segmentation.onnx", "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx"),
+    ("emb", "Speaker embedding model", "diarize-embedding.onnx", "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"),
+];
+
 fn ai_dirs(state: &State<AppState>) -> Result<(PathBuf, PathBuf, PathBuf), String> {
     let rt = state.0.lock().unwrap();
     require_user(&rt)?;
@@ -216,6 +221,8 @@ fn find_exe(dir: &Path, names: &[&str]) -> Option<PathBuf> {
 fn resolve_engine(state: &State<AppState>, engines: &Path, which: &str) -> Option<PathBuf> {
     let (pref_key, names): (&str, &[&str]) = if which == "whisper" {
         ("aiWhisperPath", if cfg!(windows) { &["whisper-cli.exe"] } else if cfg!(target_os = "android") { &["libwhisper-cli.so", "whisper-cli"] } else { &["whisper-cli"] })
+    } else if which == "diarize" {
+        ("aiDiarizePath", if cfg!(windows) { &["sherpa-onnx-offline-speaker-diarization.exe"] } else { &["sherpa-onnx-offline-speaker-diarization"] })
     } else {
         ("aiLlamaPath", if cfg!(windows) { &["llama-cli.exe"] } else if cfg!(target_os = "android") { &["libllama-cli.so", "llama-cli"] } else { &["llama-cli"] })
     };
@@ -255,6 +262,7 @@ fn android_native_lib_dir() -> Option<PathBuf> {
 
 fn model_file(models: &Path, kind: &str, id: &str) -> Option<(String, PathBuf)> {
     if kind == "whisper" { WHISPER_MODELS.iter().find(|m| m.0 == id).map(|m| (m.2.to_string(), models.join(m.2))) }
+    else if kind == "diarize" { DIARIZE_MODELS.iter().find(|m| m.0 == id).map(|m| (m.2.to_string(), models.join(m.2))) }
     else { LLM_MODELS.iter().find(|m| m.0 == id).map(|m| (m.2.to_string(), models.join(m.2))) }
 }
 fn engine_download_url(which: &str) -> Option<String> {
@@ -263,8 +271,68 @@ fn engine_download_url(which: &str) -> Option<String> {
         ("whisper", "windows") => Some("https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.4/whisper-bin-x64.zip".into()),
         ("llama", "windows") => Some("https://github.com/ggml-org/llama.cpp/releases/download/b6123/llama-b6123-bin-win-cpu-x64.zip".into()),
         ("llama", "macos") => Some(format!("https://github.com/ggml-org/llama.cpp/releases/download/b6123/llama-b6123-bin-macos-{}.zip", if arch == "aarch64" { "arm64" } else { "x64" })),
+        ("diarize", "windows") => Some("https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts.tar.bz2".into()),
+        ("diarize", "macos") => Some(format!("https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-v2.0.1-osx-{}-shared-no-tts.tar.bz2", if arch == "aarch64" { "arm64" } else { "x64" })),
         _ => None,
     }
+}
+
+fn tar_entry_path(dir: &Path, name: &str) -> Option<PathBuf> {
+    let mut out = dir.to_path_buf();
+    for part in name.split('/') {
+        if part.is_empty() || part == "." { continue; }
+        if part == ".." { return None; }
+        out.push(part);
+    }
+    if out == dir { None } else { Some(out) }
+}
+// Minimal ustar reader for engine packages published as .tar.bz2 (the
+// speaker-separation engine ships only in that form). Handles the base,
+// ustar-prefix and GNU longname cases those archives use; link entries are
+// recreated as copies of their target file so no symlink privilege is
+// needed on Windows.
+fn extract_tar_bytes(data: &[u8], dir: &Path) -> Result<(), String> {
+    fn parse_octal(b: &[u8]) -> u64 { let mut v: u64 = 0; for &c in b { match c { b'0'..=b'7' => v = v * 8 + (c - b'0') as u64, 0 | b' ' => { if v > 0 { break; } }, _ => break } } v }
+    fn field(b: &[u8]) -> String { let end = b.iter().position(|&c| c == 0).unwrap_or(b.len()); String::from_utf8_lossy(&b[..end]).to_string() }
+    let mut pos = 0usize;
+    let mut long_name: Option<String> = None;
+    let mut links: Vec<(PathBuf, String)> = vec![];
+    while pos + 512 <= data.len() {
+        let h = &data[pos..pos + 512];
+        if h.iter().all(|&c| c == 0) { break; }
+        let size = parse_octal(&h[124..136]) as usize;
+        let typeflag = h[156];
+        let body_start = pos + 512;
+        let body_end = body_start.saturating_add(size).min(data.len());
+        match typeflag {
+            b'L' => { long_name = Some(field(&data[body_start..body_end])); }
+            b'x' | b'g' => {}
+            _ => {
+                let mut name = field(&h[0..100]);
+                if &h[257..262] == b"ustar" { let prefix = field(&h[345..500]); if !prefix.is_empty() { name = format!("{}/{}", prefix, name); } }
+                if let Some(l) = long_name.take() { if !l.is_empty() { name = l; } }
+                if let Some(out) = tar_entry_path(dir, &name) {
+                    if typeflag == b'5' { fs::create_dir_all(&out).map_err(|e| e.to_string())?; }
+                    else if typeflag == b'1' || typeflag == b'2' { links.push((out, field(&h[157..257]))); }
+                    else { if let Some(parent) = out.parent() { fs::create_dir_all(parent).map_err(|e| e.to_string())?; } fs::write(&out, &data[body_start..body_end]).map_err(|e| e.to_string())?; }
+                }
+            }
+        }
+        pos = body_start + (size + 511) / 512 * 512;
+    }
+    for (out, target) in links {
+        let cand = out.parent().map(|p| p.join(&target)).filter(|p| p.exists()).or_else(|| tar_entry_path(dir, &target).filter(|p| p.exists()));
+        if let Some(srcp) = cand { if !out.exists() { if let Some(parent) = out.parent() { let _ = fs::create_dir_all(parent); } let _ = fs::copy(&srcp, &out); } }
+    }
+    #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; let mut stack = vec![dir.to_path_buf()]; while let Some(d) = stack.pop() { if let Ok(rd) = fs::read_dir(&d) { for e in rd.flatten() { let p = e.path(); if p.is_dir() { stack.push(p); } else { let _ = fs::set_permissions(&p, fs::Permissions::from_mode(0o755)); } } } } }
+    Ok(())
+}
+fn extract_tar_bz2(src: &Path, dir: &Path) -> Result<(), String> {
+    use std::io::Read as _;
+    let f = fs::File::open(src).map_err(|e| e.to_string())?;
+    let mut data = Vec::new();
+    bzip2::read::BzDecoder::new(f).read_to_end(&mut data).map_err(|e| format!("Extraction failed: {}", e))?;
+    extract_tar_bytes(&data, dir).map_err(|e| format!("Extraction failed: {}", e))
 }
 
 #[tauri::command]
@@ -272,14 +340,16 @@ fn ai_status(state: State<AppState>, ai: State<AiState>) -> Result<Value, String
     let (models, engines, _audio) = ai_dirs(&state)?;
     let whisper = resolve_engine(&state, &engines, "whisper");
     let llama = resolve_engine(&state, &engines, "llama");
+    let diarize = resolve_engine(&state, &engines, "diarize");
     let mut model_list: Vec<Value> = vec![];
     for (id, label, file) in WHISPER_MODELS { let p = models.join(file); model_list.push(json!({"id": id, "kind": "whisper", "label": label, "file": file, "downloaded": p.exists(), "bytes": p.metadata().map(|m| m.len()).unwrap_or(0)})); }
     for (id, label, file, _url) in LLM_MODELS { let p = models.join(file); model_list.push(json!({"id": id, "kind": "llm", "label": label, "file": file, "downloaded": p.exists(), "bytes": p.metadata().map(|m| m.len()).unwrap_or(0)})); }
-    if let Ok(rd) = fs::read_dir(&models) { for e in rd.flatten() { let n = e.file_name().to_string_lossy().to_string(); let known = WHISPER_MODELS.iter().any(|m| m.2 == n) || LLM_MODELS.iter().any(|m| m.2 == n); if !known && (n.ends_with(".bin") || n.ends_with(".gguf")) { model_list.push(json!({"id": format!("custom:{}", n), "kind": if n.ends_with(".bin") { "whisper" } else { "llm" }, "label": format!("Custom model {}", n), "file": n, "downloaded": true, "bytes": e.metadata().map(|m| m.len()).unwrap_or(0)})); } } }
+    for (id, label, file, _url) in DIARIZE_MODELS { let p = models.join(file); model_list.push(json!({"id": id, "kind": "diarize", "label": label, "file": file, "downloaded": p.exists(), "bytes": p.metadata().map(|m| m.len()).unwrap_or(0)})); }
+    if let Ok(rd) = fs::read_dir(&models) { for e in rd.flatten() { let n = e.file_name().to_string_lossy().to_string(); let known = WHISPER_MODELS.iter().any(|m| m.2 == n) || LLM_MODELS.iter().any(|m| m.2 == n) || DIARIZE_MODELS.iter().any(|m| m.2 == n); if !known && (n.ends_with(".bin") || n.ends_with(".gguf")) { model_list.push(json!({"id": format!("custom:{}", n), "kind": if n.ends_with(".bin") { "whisper" } else { "llm" }, "label": format!("Custom model {}", n), "file": n, "downloaded": true, "bytes": e.metadata().map(|m| m.len()).unwrap_or(0)})); } } }
     let rt = ai.0.lock().unwrap();
     let download = rt.download.as_ref().map(|d| { let s = d.lock().unwrap(); json!({"label": s.label, "received": s.received, "total": s.total, "done": s.done, "error": s.error}) });
     let proc = rt.proc.as_ref().map(|p| { let s = p.lock().unwrap(); json!({"kind": s.kind, "done": s.done}) });
-    Ok(json!({"whisper": {"found": whisper.is_some(), "path": whisper.map(|p| p.to_string_lossy().to_string())}, "llama": {"found": llama.is_some(), "path": llama.map(|p| p.to_string_lossy().to_string())}, "models": model_list, "modelsDir": models.to_string_lossy(), "enginesDir": engines.to_string_lossy(), "os": std::env::consts::OS, "download": download, "proc": proc}))
+    Ok(json!({"whisper": {"found": whisper.is_some(), "path": whisper.map(|p| p.to_string_lossy().to_string())}, "llama": {"found": llama.is_some(), "path": llama.map(|p| p.to_string_lossy().to_string())}, "diarize": {"found": diarize.is_some(), "path": diarize.map(|p| p.to_string_lossy().to_string())}, "models": model_list, "modelsDir": models.to_string_lossy(), "enginesDir": engines.to_string_lossy(), "os": std::env::consts::OS, "download": download, "proc": proc}))
 }
 
 #[tauri::command]
@@ -287,10 +357,13 @@ fn ai_download(state: State<AppState>, ai: State<AiState>, what: String) -> Resu
     let (models, engines, _a) = ai_dirs(&state)?;
     let (url, dest, extract_to, label): (String, PathBuf, Option<PathBuf>, String) = if let Some(w) = what.strip_prefix("engine-") {
         let url = engine_download_url(w).ok_or(if cfg!(target_os = "android") { "Engines are bundled with the Android app and cannot be downloaded. Reinstall or update the app to change engines." } else { "No automatic engine package for this system. Set a custom engine path (on macOS, whisper-cpp / llama.cpp can be installed via Homebrew)." })?;
-        (url.clone(), engines.join(format!("{}-engine.zip", w)), Some(engines.join(w)), format!("{} engine", w))
+        (url.clone(), engines.join(format!("{}-engine.{}", w, if url.ends_with(".tar.bz2") { "tar.bz2" } else { "zip" })), Some(engines.join(w)), format!("{} engine", w))
     } else if let Some(id) = what.strip_prefix("whisper-") {
         let (_f, p) = model_file(&models, "whisper", id).ok_or("Unknown model")?;
         (format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}", p.file_name().unwrap().to_string_lossy()), p, None, format!("Whisper {} model", id))
+    } else if let Some(id) = what.strip_prefix("diarize-") {
+        let m = DIARIZE_MODELS.iter().find(|m| m.0 == id).ok_or("Unknown model")?;
+        (m.3.to_string(), models.join(m.2), None, format!("Speaker {} model", id))
     } else if let Some(id) = what.strip_prefix("llm-") {
         let m = LLM_MODELS.iter().find(|m| m.0 == id).ok_or("Unknown model")?;
         (m.3.to_string(), models.join(m.2), None, format!("Note {} model", id))
@@ -322,11 +395,16 @@ fn ai_http_agent() -> ureq::Agent {
         }
         drop(file);
         if let Some(dir) = extract_to {
+            if dest.to_string_lossy().ends_with(".tar.bz2") {
+                if let Err(e) = extract_tar_bz2(&dest, &dir) { fail(&shared, e); return; }
+                let _ = fs::remove_file(&dest);
+            } else {
             let f = match fs::File::open(&dest) { Ok(f) => f, Err(e) => { fail(&shared, e.to_string()); return; } };
             let mut zip = match zip::ZipArchive::new(f) { Ok(z) => z, Err(e) => { fail(&shared, format!("Extraction failed: {}", e)); return; } };
             if let Err(e) = zip.extract(&dir) { fail(&shared, format!("Extraction failed: {}", e)); return; }
             let _ = fs::remove_file(&dest);
             #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; let mut stack = vec![dir.clone()]; while let Some(d) = stack.pop() { if let Ok(rd) = fs::read_dir(&d) { for e in rd.flatten() { let p = e.path(); if p.is_dir() { stack.push(p); } else { let _ = fs::set_permissions(&p, fs::Permissions::from_mode(0o755)); } } } } }
+            }
         }
         let mut s = shared.lock().unwrap(); s.done = true;
     });
@@ -336,7 +414,7 @@ fn ai_http_agent() -> ureq::Agent {
 fn ai_download_cancel(ai: State<AiState>) -> Result<bool, String> { let rt = ai.0.lock().unwrap(); if let Some(d) = &rt.download { d.lock().unwrap().cancelled = true; } Ok(true) }
 #[tauri::command]
 fn ai_set_engine_path(state: State<AppState>, which: String, path: String) -> Result<bool, String> {
-    let key = if which == "whisper" { "aiWhisperPath" } else { "aiLlamaPath" };
+    let key = if which == "whisper" { "aiWhisperPath" } else if which == "diarize" { "aiDiarizePath" } else { "aiLlamaPath" };
     let rt = state.0.lock().unwrap(); require_user(&rt)?;
     rt.db.as_ref().unwrap().execute("INSERT INTO preferences(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", params![key, path]).map_err(|e| e.to_string())?; Ok(true)
 }
@@ -346,6 +424,7 @@ fn ai_import_model(state: State<AppState>, kind: String, src: String) -> Result<
     let srcp = PathBuf::from(&src); let name = srcp.file_name().ok_or("Invalid path")?.to_string_lossy().to_string();
     if kind == "whisper" && !name.ends_with(".bin") { return Err("Whisper model must be a .bin file".into()); }
     if kind == "llm" && !name.ends_with(".gguf") { return Err("Note model must be a .gguf file".into()); }
+    if kind == "diarize" && !name.ends_with(".onnx") { return Err("Speaker model must be a .onnx file".into()); }
     fs::copy(&srcp, models.join(&name)).map_err(|e| e.to_string())?; Ok(name)
 }
 #[tauri::command]
@@ -412,18 +491,85 @@ fn spawn_proc(ai: &State<AiState>, kind: &str, mut cmd: std::process::Command) -
     Ok(true)
 }
 #[tauri::command]
-fn transcribe_start(state: State<AppState>, ai: State<AiState>, audio_path: String, model: String, lang: String, prompt: Option<String>) -> Result<bool, String> {
+fn transcribe_start(state: State<AppState>, ai: State<AiState>, audio_path: String, model: String, lang: String, prompt: Option<String>, timestamps: Option<bool>) -> Result<bool, String> {
     let (models, engines, _a) = ai_dirs(&state)?;
     let bin = resolve_engine(&state, &engines, "whisper").ok_or("Transcription engine (whisper-cli) not found. Download the engine in Models, or set a custom engine path.")?;
     let model_path = if let Some(f) = model.strip_prefix("custom:") { models.join(f) } else { model_file(&models, "whisper", &model).ok_or("Unknown model")?.1 };
     if !model_path.exists() { return Err("The selected model has not been downloaded".into()); }
     let mut cmd = std::process::Command::new(bin);
-    cmd.arg("-m").arg(&model_path).arg("-f").arg(&audio_path).arg("-l").arg(if lang.is_empty() { "auto".to_string() } else { lang }).arg("--no-timestamps").arg("-pp").arg("-t").arg("4");
+    cmd.arg("-m").arg(&model_path).arg("-f").arg(&audio_path).arg("-l").arg(if lang.is_empty() { "auto".to_string() } else { lang }).arg("-pp").arg("-t").arg("4");
+    if timestamps != Some(true) { cmd.arg("--no-timestamps"); }
     // Optional vocabulary bias: the client name + clinician-supplied terms,
     // passed as whisper.cpp's initial prompt so names/medication/technical
     // terms are recognized more reliably.
     if let Some(p) = prompt { let p = p.trim(); if !p.is_empty() { cmd.arg("--prompt").arg(p); } }
     spawn_proc(&ai, "transcribe", cmd)
+}
+// Locate the fmt/data chunks of a PCM WAV (returns channels, sample rate,
+// and the data chunk's byte span). The app records 16-bit mono 16 kHz WAVs.
+fn wav_data_span(wav: &[u8]) -> Result<(u16, u32, usize, usize), String> {
+    if wav.len() < 44 || &wav[0..4] != b"RIFF" || &wav[8..12] != b"WAVE" { return Err("Not a WAV recording".into()); }
+    let mut fmt: Option<(u16, u16, u32, u16)> = None;
+    let mut data: Option<(usize, usize)> = None;
+    let mut pos = 12usize;
+    while pos + 8 <= wav.len() {
+        let id = &wav[pos..pos + 4];
+        let size = u32::from_le_bytes([wav[pos + 4], wav[pos + 5], wav[pos + 6], wav[pos + 7]]) as usize;
+        let start = pos + 8; let end = start.saturating_add(size).min(wav.len());
+        if id == b"fmt " && end - start >= 16 { fmt = Some((u16::from_le_bytes([wav[start], wav[start + 1]]), u16::from_le_bytes([wav[start + 2], wav[start + 3]]), u32::from_le_bytes([wav[start + 4], wav[start + 5], wav[start + 6], wav[start + 7]]), u16::from_le_bytes([wav[start + 14], wav[start + 15]]))); }
+        if id == b"data" { data = Some((start, end - start)); }
+        pos = start + size + (size % 2);
+    }
+    let (format, channels, rate, bits) = fmt.ok_or("WAV header not understood")?;
+    if format != 1 || bits != 16 { return Err("Only uncompressed 16-bit WAV recordings can be combined".into()); }
+    let (ds, dl) = data.ok_or("WAV has no audio data")?;
+    Ok((channels, rate, ds, dl - (dl % 2)))
+}
+// Concatenate two WAVs with a silent gap — used to prepend the enrolled
+// voice sample to a session recording so the diarization engine clusters
+// the enrollment passage and the session in a single pass; the cluster
+// that dominates the enrollment window is the therapist.
+fn concat_wavs(first: &[u8], second: &[u8], gap_ms: u32) -> Result<Vec<u8>, String> {
+    let (ch1, rate1, s1, l1) = wav_data_span(first)?;
+    let (ch2, rate2, s2, l2) = wav_data_span(second)?;
+    if ch1 != ch2 || rate1 != rate2 { return Err("The enrollment sample and the session recording use different audio formats and cannot be combined.".into()); }
+    let gap_bytes = (rate1 as usize * gap_ms as usize / 1000) * 2 * ch1 as usize;
+    let data_len = l1 + gap_bytes + l2;
+    let mut out = Vec::with_capacity(44 + data_len);
+    out.extend_from_slice(b"RIFF"); out.extend_from_slice(&(36u32 + data_len as u32).to_le_bytes()); out.extend_from_slice(b"WAVE");
+    out.extend_from_slice(b"fmt "); out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes()); out.extend_from_slice(&ch1.to_le_bytes());
+    out.extend_from_slice(&rate1.to_le_bytes()); out.extend_from_slice(&(rate1 * ch1 as u32 * 2).to_le_bytes());
+    out.extend_from_slice(&(ch1 * 2).to_le_bytes()); out.extend_from_slice(&16u16.to_le_bytes());
+    out.extend_from_slice(b"data"); out.extend_from_slice(&(data_len as u32).to_le_bytes());
+    out.extend_from_slice(&first[s1..s1 + l1]);
+    out.resize(out.len() + gap_bytes, 0);
+    out.extend_from_slice(&second[s2..s2 + l2]);
+    Ok(out)
+}
+#[tauri::command]
+fn diarize_start(state: State<AppState>, ai: State<AiState>, audio_path: String, enroll_path: Option<String>, num_speakers: Option<i32>) -> Result<Value, String> {
+    let (models, engines, audio) = ai_dirs(&state)?;
+    let bin = resolve_engine(&state, &engines, "diarize").ok_or("Speaker separation engine not found. Download the engine in Models & Settings, or set a custom engine path.")?;
+    let seg = model_file(&models, "diarize", "seg").ok_or("Unknown model")?.1;
+    let emb = model_file(&models, "diarize", "emb").ok_or("Unknown model")?.1;
+    if !seg.exists() || !emb.exists() { return Err("The speaker models have not been downloaded yet (Models & Settings).".into()); }
+    let mut input = PathBuf::from(&audio_path);
+    let mut combined = false;
+    if let Some(ep) = enroll_path { let epb = PathBuf::from(&ep); if epb.exists() {
+        let a = fs::read(&epb).map_err(|e| e.to_string())?;
+        let b = fs::read(&input).map_err(|e| e.to_string())?;
+        let merged = concat_wavs(&a, &b, 1000)?;
+        let tmp = audio.join(format!("diarize-{}.wav", Uuid::new_v4()));
+        fs::write(&tmp, &merged).map_err(|e| e.to_string())?;
+        input = tmp; combined = true;
+    } }
+    let mut cmd = std::process::Command::new(bin);
+    cmd.arg(format!("--segmentation.pyannote-model={}", seg.to_string_lossy())).arg(format!("--embedding.model={}", emb.to_string_lossy()));
+    match num_speakers { Some(n) if n > 0 => { cmd.arg(format!("--clustering.num-clusters={}", n)); }, _ => { cmd.arg("--clustering.cluster-threshold=0.5"); } }
+    cmd.arg(&input);
+    spawn_proc(&ai, "diarize", cmd)?;
+    Ok(json!({"input": input.to_string_lossy(), "combined": combined}))
 }
 #[tauri::command]
 fn generate_start(state: State<AppState>, ai: State<AiState>, model: String, prompt: String) -> Result<bool, String> {
@@ -469,4 +615,4 @@ fn ai_proc_cancel(ai: State<AiState>) -> Result<bool, String> { let rt = ai.0.lo
     } else { Err("External links are disabled in this app".into()) }
 }
 
-pub fn run(){tauri::Builder::default().plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_opener::init()).manage(AppState(Mutex::new(Runtime::default()))).manage(AiState(Mutex::new(AiRuntime::default()))).invoke_handler(tauri::generate_handler![startup_status,startup_setup,startup_login,auth_status,auth_lock,db_get_state,db_set_state,db_list_prefs,db_get_pref,db_set_pref,db_remove_pref,db_info,db_backup,audit_list,audit_verify,audit_event,users_list,users_create,users_set_active,change_password,open_path,open_external,ai_status,ai_download,ai_download_cancel,ai_set_engine_path,ai_import_model,audio_begin,audio_append,audio_finish,audio_discard,transcribe_start,generate_start,ai_proc_poll,ai_proc_cancel]).run(tauri::generate_context!()).expect("error while running Tauri application");}
+pub fn run(){tauri::Builder::default().plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_opener::init()).manage(AppState(Mutex::new(Runtime::default()))).manage(AiState(Mutex::new(AiRuntime::default()))).invoke_handler(tauri::generate_handler![startup_status,startup_setup,startup_login,auth_status,auth_lock,db_get_state,db_set_state,db_list_prefs,db_get_pref,db_set_pref,db_remove_pref,db_info,db_backup,audit_list,audit_verify,audit_event,users_list,users_create,users_set_active,change_password,open_path,open_external,ai_status,ai_download,ai_download_cancel,ai_set_engine_path,ai_import_model,audio_begin,audio_append,audio_finish,audio_discard,transcribe_start,diarize_start,generate_start,ai_proc_poll,ai_proc_cancel]).run(tauri::generate_context!()).expect("error while running Tauri application");}
