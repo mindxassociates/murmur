@@ -276,23 +276,26 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   const minePrompt = w.buildNotePrompt('Client reported poor sleep and work stress.', 'brief');
   check('prompt carries preferred-phrasing subsection with favorite + custom', minePrompt.includes("Therapist's own preferred phrasing") && minePrompt.includes('relaxation and breathing skills') && minePrompt.includes('Client smiled for the first time in several weeks.'));
   check('preferred phrasing after corpus, before custom template', minePrompt.indexOf("Therapist's own preferred phrasing") > minePrompt.indexOf('CLINICAL LANGUAGE CORPUS') && minePrompt.indexOf("Therapist's own preferred phrasing") < minePrompt.indexOf('CUSTOM TEMPLATE'));
-  const subjTa = w.document.querySelector('textarea[data-seckey="subjective"]');
-  subjTa.focus();
+  const noteBox = $('nText');
+  noteBox.focus();
   const chip = [...w.document.querySelectorAll('#phrasePanel [data-act="insert"]')].find(b => b.getAttribute('data-phrase') === RELAX);
+  const caret = noteBox.value.indexOf('\n') + 1;
+  noteBox.setSelectionRange(caret, caret);
   chip.click(); await tick();
-  check('phrase click inserts into the focused note textarea', subjTa.value.includes('relaxation and breathing skills to reduce physiological arousal'));
+  check('phrase click inserts into the single note box at the caret', noteBox.value.slice(caret, caret + 20).includes('Therapist taught') && noteBox.value.includes('relaxation and breathing skills to reduce physiological arousal'));
   check('i18n dictionaries keep EN/ZH key parity', JSON.stringify(Object.keys(w.eval('I18N.en')).sort()) === JSON.stringify(Object.keys(w.eval('I18N.zh')).sort()));
   $('aiOrientation').value = '';
   await w.aiPollOnce(); await w.aiPollOnce();
-  const subj = w.document.querySelector('textarea[data-seckey="subjective"]');
-  check('generated JSON parsed into SOAP section editor', subj && subj.value.includes('poor sleep'));
+  const subj = $('nText');
+  check('generated note lands in ONE text box with section heading lines', subj && subj.value.includes('poor sleep') && subj.value.includes('Subjective (S):') && subj.value.includes('Plan (P):') && w.document.querySelectorAll('#nSections textarea').length === 1);
   check('note editor opened as unsaved draft', $('noteEditorWrap').style.display !== 'none' && savedState().sessions.length === 0);
 
   // V1.8.0: the composed MSE is offered as a one-click insert into the draft
   check('MSE insert offered for the AI draft', $('mseInsertWrap').style.display !== 'none');
   w.insertMseIntoDraft();
-  const objTa = w.document.querySelector('textarea[data-seckey="objective"]');
-  check('MSE insert appends the composed paragraph to the Objective section (SOAP mapping)', !!objTa && objTa.value.includes('Mental Status Exam:') && objTa.value.includes('Pressured speech'));
+  const boxAfterMse = $('nText').value;
+  const mseIdx = boxAfterMse.indexOf('Mental Status Exam:');
+  check('MSE insert lands at the end of the Objective section block (SOAP mapping)', mseIdx > boxAfterMse.indexOf('Objective (O):') && mseIdx < boxAfterMse.indexOf('Assessment (A):') && boxAfterMse.includes('Pressured speech'));
 
   // Verify note (V1.7.0): second-pass faithfulness check over the draft.
   // The fake model distinguishes verification prompts by the marker
@@ -300,12 +303,12 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('verify UI exists', typeof w.verifyNote === 'function' && !!$('verifyBtn') && !!$('verifyPanel'));
   check('verify row shown for the AI draft', $('verifyWrap').style.display !== 'none');
   verifyOutput = 'noise<|im_start|>assistant\n[{"quote":"mild improvement in coping","issue":"The source reports stress and poor sleep but never says coping has improved."}]<|im_end|>\nllama_print_timings: total';
-  const assessBefore = w.document.querySelector('textarea[data-seckey="assessment"]').value;
+  const assessBefore = $('nText').value;
   await w.verifyNote();
   check('verify prompt carries the verification marker + the draft', lastPrompt.includes('VERIFY NOTE AGAINST SOURCE') && lastPrompt.includes('mild improvement in coping'));
   await w.verifyPollOnce(); await w.verifyPollOnce();
   check('verify panel lists the planted flag (quote + issue)', $('verifyPanel').innerHTML.includes('mild improvement in coping') && $('verifyPanel').innerHTML.includes('never says coping has improved'));
-  check('verification leaves the draft text unchanged', w.document.querySelector('textarea[data-seckey="assessment"]').value === assessBefore && subj.value.includes('poor sleep'));
+  check('verification leaves the draft text unchanged', $('nText').value === assessBefore && subj.value.includes('poor sleep'));
   const dismissBtn = [...$('verifyPanel').querySelectorAll('button')].find(b => (b.getAttribute('onclick') || '').includes('dismissVerifyFlag'));
   check('flag has a dismiss button', !!dismissBtn);
   dismissBtn.click(); await tick();
@@ -320,6 +323,8 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('note saved into sessions collection', st.sessions.length === 1 && st.sessions[0].clientId === clientId);
   check('saved note keeps format + output language', st.sessions[0].format === 'soap' && st.sessions[0].outputLanguage === 'es');
   check('saved note section content intact', st.sessions[0].sections.plan.includes('Wind-down routine'));
+  check('saved note carries the canonical full text', (st.sessions[0].fullText || '').includes('Subjective (S):') && st.sessions[0].fullText.includes('Wind-down routine'));
+  check('saved note legacy text still derived for search/overview/exports', (st.sessions[0].text || '').includes('Wind-down routine'));
   check('transcript auto-deleted after save (option on)', $('aiTranscript').value === '');
   check('notes list renders the saved note', $('notesList').innerHTML.includes('Test Client A'));
 
@@ -399,15 +404,15 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
 
   // Manual note + format switch in the editor
   w.openNote();
-  check('manual note editor defaults to SOAP sections', !!w.document.querySelector('textarea[data-seckey="subjective"]'));
+  check('manual note editor opens as ONE document with SOAP headings', $('nText').value.includes('Subjective (S):') && $('nText').value.includes('Plan (P):'));
   $('nFormat').value = 'dap'; w.changeNoteFormat();
-  check('switching format re-renders DAP sections', !!w.document.querySelector('textarea[data-seckey="data"]') && !w.document.querySelector('textarea[data-seckey="subjective"]'));
+  check('switching format re-composes the document with DAP headings', $('nText').value.includes('Data (D):') && !$('nText').value.includes('Subjective (S):'));
   $('nFormat').value = 'girp'; w.changeNoteFormat();
-  check('switching format re-renders GIRP sections', !!w.document.querySelector('textarea[data-seckey="goal"]') && !!w.document.querySelector('textarea[data-seckey="intervention"]') && !!w.document.querySelector('textarea[data-seckey="response"]'));
+  check('switching format re-composes GIRP headings', $('nText').value.includes('Goal (G):') && $('nText').value.includes('Intervention (I):') && $('nText').value.includes('Response (R):'));
   $('nFormat').value = 'pirp'; w.changeNoteFormat();
-  check('switching format re-renders PIRP sections', !!w.document.querySelector('textarea[data-seckey="problem"]'));
+  check('switching format re-composes PIRP headings', $('nText').value.includes('Problem (P):'));
   $('nFormat').value = 'sirp'; w.changeNoteFormat();
-  check('switching format re-renders SIRP sections', !!w.document.querySelector('textarea[data-seckey="situation"]'));
+  check('switching format re-composes SIRP headings', $('nText').value.includes('Situation (S):'));
   w.closeNoteEditor();
 
   // Consent (V1.9.0): no standalone tab; the form lives in a Studio-opened dialog,
@@ -440,7 +445,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('rust: deprecated whisper main binary is not a candidate', !rustSrc.includes('"main.exe"') && !rustSrc.includes('"main"'));
   check('rust: whisper-cli.exe is the Windows whisper candidate', rustSrc.includes('&["whisper-cli.exe"]'));
   check('rust: engine search honors strict candidate priority', rustSrc.includes('for name in names'));
-  check('version V1.13.0 in UI', html.includes('Desktop V1.13.0'));
+  check('version V1.14.0 in UI', html.includes('Desktop V1.14.0'));
 
   // V1.8.0: client default format preselects in the Studio
   w.openClient(clientId);
@@ -599,7 +604,8 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   w.eval("lastGenMse='MSE marker paragraph.'");
   w.openNote(); $('nFormat').value = 'pirp'; w.changeNoteFormat();
   w.insertMseIntoDraft();
-  check('MSE insert lands in the Problem section for PIRP', w.document.querySelector('textarea[data-seckey="problem"]').value.includes('MSE marker paragraph.'));
+  const pirpBox = $('nText').value; const pmIdx = pirpBox.indexOf('MSE marker paragraph.');
+  check('MSE insert lands in the Problem section for PIRP', pmIdx > pirpBox.indexOf('Problem (P):') && pmIdx < pirpBox.indexOf('Intervention (I):'));
   w.closeNoteEditor();
 
   // V1.10.0: finalize locks the note, steps reflect it, unlock restores
@@ -607,10 +613,10 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('steps indicator has no Finalized fill before finalize', !$('noteSteps').querySelector('.step.fin'));
   await w.finalizeCurrentNote(); await flush(); await tick(300);
   check('finalize persists the finalized status', savedState().sessions.find(x => x.id === savedDet.id).status === 'finalized');
-  check('finalized note textareas are locked read-only', [...w.document.querySelectorAll('#nSections textarea')].every(tx => tx.readOnly === true));
+  check('finalized note locks the single text box read-only', $('nText').readOnly === true);
   check('steps indicator marks Finalized after finalize', !!$('noteSteps').querySelector('.step.fin'));
   await w.unlockCurrentNote(); await flush();
-  check('unlock restores editing and draft status', [...w.document.querySelectorAll('#nSections textarea')].every(tx => tx.readOnly === false) && savedState().sessions.find(x => x.id === savedDet.id).status === 'draft');
+  check('unlock restores editing and draft status', $('nText').readOnly === false && savedState().sessions.find(x => x.id === savedDet.id).status === 'draft');
   w.closeNoteEditor();
 
   // V1.10.0: case overview generation reads finalized notes only
@@ -849,6 +855,75 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('V1.13 wizard toggle drives the Studio toggle + pref', $('aiLivePreview').checked === false && w.desktopDB.getPref('aiLivePreview') === '0');
   obLp.checked = true; w.obLivePreviewChange(obLp);
   check('V1.13 wizard toggle restores the pref', w.desktopDB.getPref('aiLivePreview') === '1' && $('aiLivePreview').checked === true);
+
+
+  // ================= V1.14.0 =================
+  // WS1: MSE chips driven by REAL DOM press sequences (mousedown/mouseup/click),
+  // including a render-everything refresh landing between mousedown and mouseup.
+  w.showView('studio'); await tick();
+  w.mseClear(); await tick();
+  w.toggleMoreOpts('record'); await tick();
+  const msePhrase = 'Pressured speech';
+  const chipIn = (pid) => [...w.document.querySelectorAll('#' + pid + ' button.mse-chip')].find(b => b.getAttribute('data-phrase') === msePhrase);
+  const press = (el, mid) => { const chain = []; let n = el; while (n) { chain.push(n); n = n.parentNode; } el.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true, cancelable: true })); if (mid) mid(); let tgt = el; if (!el.isConnected) tgt = chain.find(x => x.isConnected) || w.document.body; tgt.dispatchEvent(new w.MouseEvent('mouseup', { bubbles: true, cancelable: true })); tgt.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true })); return tgt; };
+  press(chipIn('msePanel'), null); await tick();
+  check('V1.14 DOM press toggles the MSE selection', w.composeMse().includes(msePhrase));
+  check('V1.14 toggled chip shows pressed style + aria-pressed', chipIn('msePanel').classList.contains('on') && chipIn('msePanel').getAttribute('aria-pressed') === 'true');
+  check('V1.14 twin panel chip mirrors the pressed state in place', chipIn('panelMsePanel').classList.contains('on') && chipIn('panelMsePanel').getAttribute('aria-pressed') === 'true');
+  check('V1.14 composed preview updates in both panels', $('msePreview').value.includes(msePhrase) && $('panelMsePreview').value.includes(msePhrase));
+  const chipNode = chipIn('panelMsePanel');
+  const landedOn = press(chipNode, () => { w.renderAll(); w.renderHome(); });
+  await tick();
+  check('V1.14 mid-press global refresh leaves the chip node in place (click lands on the chip)', chipNode.isConnected && landedOn === chipNode);
+  check('V1.14 the press still toggles after the mid-press refresh', !w.composeMse().includes(msePhrase));
+  const mseInput = $('msePanel').querySelector('input[data-mse-note]');
+  mseInput.focus(); mseInput.value = 'focus keep test'; mseInput.dispatchEvent(new w.Event('input', { bubbles: true }));
+  press(chipIn('msePanel'), null); await tick();
+  check('V1.14 chip press never rebuilds the panel (input node + focus survive)', $('msePanel').querySelector('input[data-mse-note]') === mseInput && w.document.activeElement === mseInput);
+  check('V1.14 typing in a domain note input survives a chip toggle', mseInput.value === 'focus keep test' && w.composeMse().includes(msePhrase));
+  w.renderMsePanel();
+  check('V1.14 a full re-render (mount/language path) restores focus to the same domain input', w.document.activeElement === $('msePanel').querySelector('input[data-mse-note]') && w.document.activeElement !== mseInput);
+  w.mseClear();
+  w.toggleMoreOpts('record'); await tick();
+
+  // WS2: legacy load, edit persistence, heading derivation, freeform fallback
+  const legacyId = 'legacy-note-1';
+  const dbRef2 = w.eval('db');
+  dbRef2.sessions.push({ id: legacyId, clientId, date: '2026-10-15', format: 'soap', outputLanguage: 'follow', sections: { subjective: 'LEGACY SUBJ marker', plan: 'LEGACY PLAN marker' }, text: 'Subjective (S)\nLEGACY SUBJ marker', status: 'draft', createdAt: '2026-10-15T00:00:00.000Z', updatedAt: '2026-10-15T00:00:00.000Z' });
+  await w.persistWorkspace(); await flush();
+  w.openNote(legacyId); await tick();
+  check('V1.14 legacy sections-only note loads composed into the one box', $('nText').value.includes('Subjective (S):') && $('nText').value.includes('LEGACY SUBJ marker') && $('nText').value.includes('LEGACY PLAN marker'));
+  $('nText').value = $('nText').value + '\nEdited tail line.';
+  await w.saveNote(); await flush();
+  const legacySaved = savedState().sessions.find(s => s.id === legacyId);
+  check('V1.14 edited document persists as fullText', (legacySaved.fullText || '').includes('Edited tail line.'));
+  check('V1.14 save re-derives sections from the heading lines', (legacySaved.sections.subjective || '').includes('LEGACY SUBJ marker') && (legacySaved.sections.plan || '').includes('LEGACY PLAN marker'));
+  check('V1.14 derived legacy text keeps search/overview/exports working', (legacySaved.text || '').includes('LEGACY SUBJ marker'));
+  check('V1.14 copy-note button exists and audits like the old per-section copy', typeof w.copyNoteBody === 'function');
+  auditEvents.length = 0; w.copyNoteBody(); await tick();
+  check('V1.14 copy note text is audit-logged', auditEvents.some(e => e.action === 'Copy note'));
+  w.openNote(); $('nText').value = 'Completely freeform note with no headings at all.';
+  await w.saveNote(); await flush();
+  const freeSaved = savedState().sessions[savedState().sessions.length - 1];
+  check('V1.14 heading-less document falls back to one note section + verbatim text', (freeSaved.sections.note || '').includes('freeform note') && freeSaved.text.includes('freeform note'));
+  w.closeNoteEditor();
+
+  // WS3: guided Studio — steps on the surface, everything else behind More options
+  check('V1.14 studio shows the three plain-language steps', $('studio').textContent.includes('Choose the client') && $('studio').textContent.includes('Record the session') && $('studio').textContent.includes('Write the note'));
+  check('V1.14 More options disclosures start closed', $('moreOptsRecord').style.display === 'none' && $('moreOptsNote').style.display === 'none');
+  check('V1.14 MSE + vocabulary + separate-speakers live behind record More options', $('moreOptsRecord').contains($('msePanel')) && $('moreOptsRecord').contains($('aiVocabulary')) && $('moreOptsRecord').contains($('aiDiarizeBtn')) && $('moreOptsRecord').contains($('aiDelAudio')));
+  check('V1.14 detail/quote + template + session instructions live behind note More options', $('moreOptsNote').contains($('aiSessionInstructions')) && $('moreOptsNote').contains($('aiCustomTemplate')) && $('moreOptsNote').contains($('aiDetail')));
+  check('V1.14 consent gate stays visible beside Record (outside any disclosure)', !$('moreOptsRecord').contains($('aiConsent')) && $('studio').contains($('aiConsent')));
+  w.toggleMoreOpts('record'); await tick();
+  check('V1.14 opening record More options reveals the MSE panel + persists the pref', $('moreOptsRecord').style.display !== 'none' && (w.desktopDB.getPref('aiMoreOpts') || '').includes('"record":true') && $('moreOptsRecordBtn').getAttribute('aria-expanded') === 'true');
+  w.toggleMoreOpts('record'); await tick();
+  check('V1.14 closing persists too', $('moreOptsRecord').style.display === 'none' && (w.desktopDB.getPref('aiMoreOpts') || '').includes('"record":false'));
+  const srcSeg = w.document.querySelector('.seg[data-seg="recSource"]');
+  check('V1.14 recording source renders as a segmented control', !!srcSeg && !!srcSeg.querySelector('[data-segv="tele"]'));
+  w.segPick('recSource', 'tele');
+  check('V1.14 source seg drives the hidden select + pref', $('aiRecSource').value === 'tele' && w.desktopDB.getPref('aiRecSource') === 'tele');
+  w.segPick('recSource', 'mic');
+  check('V1.14 source seg switches back to microphone', $('aiRecSource').value === 'mic' && w.desktopDB.getPref('aiRecSource') === 'mic');
 
 
   // Delete flows

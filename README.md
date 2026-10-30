@@ -109,4 +109,4 @@ Murmur also runs on Android (arm64). The Android build bundles the AI engines in
 Murmur is developed by [Mind X Associates](https://mind.us) ([Mind X社区 — 中文](https://mind.us/zh)). The app itself carries the same credit in the sidebar; the link opens the developer site in your browser (the only external link the app allows).
 
 ## Version history
-See `CHANGELOG.md`. Current: **V1.13.0**.
+See `CHANGELOG.md`. Current: **V1.14.0**.
