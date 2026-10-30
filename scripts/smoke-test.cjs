@@ -278,8 +278,8 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   // V1.8.0: the composed MSE is offered as a one-click insert into the draft
   check('MSE insert offered for the AI draft', $('mseInsertWrap').style.display !== 'none');
   w.insertMseIntoDraft();
-  const assessTa = w.document.querySelector('textarea[data-seckey="assessment"]');
-  check('MSE insert appends the composed paragraph to the assessment section', !!assessTa && assessTa.value.includes('Mental Status Exam:') && assessTa.value.includes('Pressured speech'));
+  const objTa = w.document.querySelector('textarea[data-seckey="objective"]');
+  check('MSE insert appends the composed paragraph to the Objective section (SOAP mapping)', !!objTa && objTa.value.includes('Mental Status Exam:') && objTa.value.includes('Pressured speech'));
 
   // Verify note (V1.7.0): second-pass faithfulness check over the draft.
   // The fake model distinguishes verification prompts by the marker
@@ -421,12 +421,13 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('rust: transcribe_start accepts an optional prompt parameter', /fn transcribe_start\([^)]*prompt: Option<String>/.test(rustSrc));
   check('rust: whisper-cli invocation passes --prompt when a vocabulary is present', rustSrc.includes('arg("--prompt")'));
   check('design tokens: warm cream background variable', html.includes('--bg:#f6f3ec'));
-  check('design tokens: sage accent variable', html.includes('--accent:#5c6f60'));
+  check('design tokens: portal teal accent variable', html.includes('--accent:#4a778b'));
+  check('design tokens: teal dark + deep variables', html.includes('--accent-dark:#355564') && html.includes('--accent-deep:#132228'));
   check('design tokens: serif display stack variable', html.includes('--font-display:Georgia'));
   check('rust: deprecated whisper main binary is not a candidate', !rustSrc.includes('"main.exe"') && !rustSrc.includes('"main"'));
   check('rust: whisper-cli.exe is the Windows whisper candidate', rustSrc.includes('&["whisper-cli.exe"]'));
   check('rust: engine search honors strict candidate priority', rustSrc.includes('for name in names'));
-  check('version V1.9.0 in UI', html.includes('Desktop V1.9.0'));
+  check('version V1.10.0 in UI', html.includes('Desktop V1.10.0'));
 
   // V1.8.0: client default format preselects in the Studio
   w.openClient(clientId);
@@ -491,6 +492,132 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('dictation target resets to transcript afterwards', w.eval('transcribeTarget') === 'transcript');
   check('dictation transcription does not add a queue item', w.getPendingNotes().length === 1);
   w.getPendingNotes().slice().forEach(p => w.removePendingNote(p.id)); await flush();
+
+
+  // V1.10.0: client workspace — four cards, diagnosis without any AI hook
+  w.openClientWorkspace(clientId); await tick();
+  check('workspace opens with overview/diagnosis/goals/sessions cards', !!$('wsOverviewCard') && !!$('wsDiagnosisCard') && !!$('wsGoalsCard') && !!$('wsSessionsCard'));
+  check('workspace replaces the clients table', $('clientsTableWrap').style.display === 'none' && $('clientWorkspace').style.display !== 'none');
+  check('diagnosis card carries no AI/generation hook', ![...$('wsDiagnosisCard').querySelectorAll('[onclick]')].some(el => /generate|prompt|overview/i.test(el.getAttribute('onclick') || '')));
+  $('wsDxCode').value = 'F41.1'; $('wsDxDesc').value = 'Generalized anxiety disorder';
+  await w.wsSaveDiagnosis(); await flush();
+  check('diagnosis add persists on the client record', (savedState().clients.find(c => c.id === clientId).diagnoses || []).some(d => d.code === 'F41.1'));
+  check('diagnosis renders in the workspace list', $('wsDxList').innerHTML.includes('F41.1'));
+  w.wsEditDiagnosis(0); $('wsDxDesc').value = 'Generalized anxiety disorder, chronic';
+  await w.wsSaveDiagnosis(); await flush();
+  check('diagnosis edit persists', savedState().clients.find(c => c.id === clientId).diagnoses[0].description.includes('chronic'));
+
+  // V1.10.0: pronouns + per-client instructions (override the global template)
+  w.openClient(clientId);
+  $('cPronouns').value = 'she/her'; $('cInstructions').value = 'CLIENT OVERRIDE MARKER: always write in the first person.';
+  await w.saveClient(); await flush();
+  const cliRec = savedState().clients.find(c => c.id === clientId);
+  check('pronouns + per-client instructions persist on the client', cliRec.pronouns === 'she/her' && (cliRec.customInstructions || '').includes('CLIENT OVERRIDE MARKER'));
+  w.openClientWorkspace(clientId); await tick();
+  check('workspace header shows pronouns', $('wsMeta').innerHTML.includes('she/her'));
+  const ovPrompt = w.buildNotePrompt('Client reported poor sleep.', 'brief');
+  check('per-client instructions override the global template in the prompt', ovPrompt.includes('CLIENT OVERRIDE MARKER') && !ovPrompt.includes(CUSTOM));
+  w.openClient(clientId); $('cInstructions').value = ''; await w.saveClient(); await flush();
+
+  // V1.10.0: quote level, session instructions, example-note exemplar
+  check('segmented controls render for format/detail/quote/session-type/modality', !!w.document.querySelector('.seg[data-seg="format"]') && !!w.document.querySelector('.seg[data-seg="detail"]') && !!w.document.querySelector('.seg[data-seg="quote"]') && !!w.document.querySelector('.seg[data-seg="sessionType"]') && !!w.document.querySelector('.seg[data-seg="modality"]'));
+  w.setQuoteLevel('many');
+  check('quote level persists as a pref', w.desktopDB.getPref('aiQuoteLevel') === 'many' && w.buildNotePrompt('Client said things are falling apart.', 'brief').includes('Direct quotes: MANY'));
+  w.setQuoteLevel('none');
+  check('quote level NONE reaches the prompt', w.buildNotePrompt('Client talked.', 'brief').includes('Direct quotes: NONE'));
+  w.setQuoteLevel('some');
+  $('setExampleNote').value = 'EXAMPLE VOICE MARKER: short, plain sentences.';
+  $('setExampleNote').dispatchEvent(new w.Event('input')); await tick(800); await flush();
+  check('example note persists to the pref store', (w.desktopDB.getPref('aiExampleNote') || '').includes('EXAMPLE VOICE MARKER'));
+  const exPrompt = w.buildNotePrompt('Client reported poor sleep.', 'brief');
+  check('example note reaches the prompt as a style exemplar (style only, never content)', exPrompt.includes('STYLE EXEMPLAR') && exPrompt.includes('EXAMPLE VOICE MARKER') && exPrompt.includes('do NOT copy its content'));
+
+  // V1.10.0: session instructions are one-shot; generation lands in the review list
+  w.showView('studio');
+  $('aiClient').value = clientId;
+  $('aiSessionInstructions').value = 'Focus on the sleep discussion only.';
+  $('aiBrief').value = 'Client discussed sleep and work stress at length today.';
+  lastPrompt = '';
+  await w.generateNote('brief');
+  check('session-specific instructions reach the prompt', lastPrompt.includes('SESSION-SPECIFIC INSTRUCTIONS') && lastPrompt.includes('Focus on the sleep discussion only.'));
+  check('session instructions field clears after generation', $('aiSessionInstructions').value === '');
+  await w.aiPollOnce(); await w.aiPollOnce(); await tick();
+  check('generated draft lands in the review list', w.getReviewDrafts().length === 1);
+  w.renderHome();
+  check('home headline counts the review draft', $('homeHeadline').textContent.includes('1 to review.'));
+  check('review list renders the draft', $('reviewList').innerHTML.includes('Test Client A'));
+  await w.saveNote(); await flush();
+  check('saving the draft removes it from the review list', w.getReviewDrafts().length === 0);
+  const rid = w.addReviewDraft({ clientId, date: '2026-10-29', format: 'soap', sections: { subjective: 'Marker draft text' }, source: 'src', sourceKind: 'brief' });
+  w.eval('reviewDraftsCache=null');
+  check('review drafts survive a simulated reload (pref store)', w.getReviewDrafts().length === 1 && $('reviewList').innerHTML.includes('Marker draft text'));
+  w.discardReviewDraft(rid); await flush();
+  check('discarding removes the review draft', w.getReviewDrafts().length === 0);
+
+  // V1.10.0: home filter tabs
+  w.setHomeFilter('review');
+  check('home filter To review hides the queue card only', $('queueCard').style.display === 'none' && $('reviewCard').style.display !== 'none');
+  w.setHomeFilter('all');
+  check('home filter All shows both cards', $('queueCard').style.display !== 'none' && $('reviewCard').style.display !== 'none');
+
+  // V1.10.0: session details round-trip Studio -> note -> Details tab
+  w.segPick('sessionType', 'couples'); w.segPick('modality', 'telehealth');
+  $('aiStartTime').value = '14:00'; $('aiEndTime').value = '14:50';
+  const detNow = w.getSessionDetails();
+  check('session details captured from the Studio controls', detNow.sessionType === 'couples' && detNow.modality === 'telehealth' && detNow.startTime === '14:00' && detNow.endTime === '14:50');
+  $('aiBrief').value = 'Couples session: partners discussed communication patterns and sleep.';
+  lastPrompt = '';
+  await w.generateNote('brief');
+  await w.aiPollOnce(); await w.aiPollOnce(); await tick();
+  check('details tab shows session type + modality + time', $('panelDetails').innerHTML.includes('Couples') && $('panelDetails').innerHTML.includes('Telehealth') && $('panelDetails').innerHTML.includes('14:00'));
+  await w.saveNote(); await flush();
+  const savedDet = savedState().sessions[savedState().sessions.length - 1];
+  check('session details persist on the saved note', savedDet.sessionType === 'couples' && savedDet.modality === 'telehealth' && savedDet.startTime === '14:00' && savedDet.endTime === '14:50');
+  check('saved note retains its source text (transcript tab + search)', (savedDet.sourceText || '').includes('communication patterns'));
+  check('transcript tab shows the retained source', $('panelTranscript').value.includes('communication patterns'));
+
+  // V1.10.0: brief word counter
+  $('aiBrief').value = 'one two three four five'; w.updateBriefWordCount();
+  check('brief word counter counts words live', $('briefWordCount').textContent.includes('5'));
+  $('aiBrief').value = ''; w.updateBriefWordCount();
+  check('brief word counter resets', $('briefWordCount').textContent.includes('0'));
+
+  // V1.10.0: MSE insert targets Problem for PIRP (SOAP -> Objective covered above)
+  w.eval("lastGenMse='MSE marker paragraph.'");
+  w.openNote(); $('nFormat').value = 'pirp'; w.changeNoteFormat();
+  w.insertMseIntoDraft();
+  check('MSE insert lands in the Problem section for PIRP', w.document.querySelector('textarea[data-seckey="problem"]').value.includes('MSE marker paragraph.'));
+  w.closeNoteEditor();
+
+  // V1.10.0: finalize locks the note, steps reflect it, unlock restores
+  w.openNote(savedDet.id); await tick();
+  check('steps indicator has no Finalized fill before finalize', !$('noteSteps').querySelector('.step.fin'));
+  await w.finalizeCurrentNote(); await flush(); await tick(300);
+  check('finalize persists the finalized status', savedState().sessions.find(x => x.id === savedDet.id).status === 'finalized');
+  check('finalized note textareas are locked read-only', [...w.document.querySelectorAll('#nSections textarea')].every(tx => tx.readOnly === true));
+  check('steps indicator marks Finalized after finalize', !!$('noteSteps').querySelector('.step.fin'));
+  await w.unlockCurrentNote(); await flush();
+  check('unlock restores editing and draft status', [...w.document.querySelectorAll('#nSections textarea')].every(tx => tx.readOnly === false) && savedState().sessions.find(x => x.id === savedDet.id).status === 'draft');
+  w.closeNoteEditor();
+
+  // V1.10.0: case overview generation reads finalized notes only
+  const dbRef = w.eval('db');
+  dbRef.sessions.push({ id: 'ov-fin', clientId, date: '2026-10-20', format: 'soap', outputLanguage: 'follow', sections: { subjective: 'FINALIZED MARKER zqx' }, text: 'FINALIZED MARKER zqx', status: 'finalized', createdAt: '2026-10-20T00:00:00.000Z', updatedAt: '2026-10-20T00:00:00.000Z' });
+  dbRef.sessions.push({ id: 'ov-draft', clientId, date: '2026-10-21', format: 'soap', outputLanguage: 'follow', sections: { subjective: 'DRAFT MARKER wkv' }, text: 'DRAFT MARKER wkv', status: 'draft', createdAt: '2026-10-21T00:00:00.000Z', updatedAt: '2026-10-21T00:00:00.000Z' });
+  lastPrompt = '';
+  await w.generateCaseOverview(clientId); await flush();
+  check('case overview prompt includes the finalized note marker', lastPrompt.includes('FINALIZED MARKER zqx'));
+  check('case overview prompt excludes the draft note marker', !lastPrompt.includes('DRAFT MARKER wkv'));
+  check('case overview is stored on the client record with a timestamp', typeof savedState().clients.find(c => c.id === clientId).caseOverview === 'string' && !!savedState().clients.find(c => c.id === clientId).caseOverviewAt);
+
+  // V1.10.0: recording auto-stop safety net
+  w.setAutoStopPref('45');
+  check('auto-stop pref persists and the timer helper exists', w.desktopDB.getPref('aiAutoStopMinutes') === '45' && w.getAutoStopMinutes() === 45 && typeof w.scheduleAutoStop === 'function');
+  w.setAutoStopPref('0');
+  check('auto-stop off reads back as 0', w.getAutoStopMinutes() === 0);
+  w.closeClientWorkspace();
+  check('clients table is accessible again after leaving the workspace', $('clientsTableWrap').style.display !== 'none');
+
 
   // Delete flows
   const noteId = savedState().sessions[0].id;

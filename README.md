@@ -2,7 +2,7 @@
 
 *Progress notes that never leave the room.*
 
-**Version 1.9.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
+**Version 1.10.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
 
 Murmur turns therapy sessions into progress notes without anything leaving the computer it runs on. Record a session (with the client's consent) or type a brief summary, transcribe and draft locally, review and edit, then save — the only network use in the whole product is the one-time download of the speech and language models you choose.
 
@@ -17,10 +17,13 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 ### Home
 - **Sessions awaiting notes**: every finished transcription — and every summary you generate from — lands in a queue on the Home view. An item stays there until its note is actually **saved** (drafts are still never auto-saved), so nothing falls through the cracks between sessions.
 - **Write all**: generate drafts for the whole queue in one run, then review them one at a time in the editor.
+- **Drafts to review**: every generated draft also lands in a review list on Home until you save or discard it. The Home headline counts both sides — "N notes to write, M to review." — and filter tabs switch between All / To write / To review.
 - **Global search**: one box searches the text of every saved note plus the pending queue's source material, with the matched term highlighted; pending items are labeled as such.
 
 ### Clients
 - Simple local client list: add, edit, delete (deleting a client also deletes their saved notes).
+- **Client workspace**: opening a client shows their workspace — a client list with pending-count dots on the left; in the center, a **case overview** (generated locally from that client's *finalized* notes only, regenerated on demand and after each finalize), a **Diagnosis** card (structured code + description entries you enter yourself — diagnoses are never suggested by the AI), **treatment goals** as a list, and a merged **Sessions** list (needs-note, to-review, and finalized, with filters). The note panel for the selected session sits on the right.
+- **Pronouns and per-client instructions**: each client record carries pronouns, and optional instructions that replace your global template for that client whenever they are set.
 - Use real names, initials, or code names — it never leaves the device.
 - **Per-client treatment goals and default format**: record each client's treatment goals and, if you like, their default note format. Selecting the client in AI Studio preselects their format, and generated drafts frame assessment and progress relative to the goals — only where the session source supports it.
 - **Per-client recording-consent record**: each client's consent status, method (verbal or written), and date live on the client record itself, with a status pill in the client list.
@@ -35,7 +38,12 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 - **Brief-summary mode**: no recording? Type a few sentences after the session and generate the same structured draft — or **dictate** them: the Dictate button records your voice alone (microphone only, no client present) and drops the transcription into the summary box for editing.
 - **Mental Status Exam quick entry**: a tappable 11-domain MSE panel (appearance through judgment) with standard clinical descriptors, an "All normal" shortcut, and a free-text note per domain. The composed paragraph steers generation as clinician-observed fact, and can be inserted into the draft with one click.
 - **Note format**: SOAP, DAP, BIRP, GIRP, PIRP, SIRP, or Narrative.
-- **Detail level**: Brief / Standard / Detailed — controls how long and deep the drafted note runs.
+- **Detail level**: Brief / Standard / Detailed — controls how long and deep the drafted note runs (Brief ≈ half of Standard; Standard targets roughly 300–500 words, Comprehensive runs five to seven sentences per section).
+- **Verbatim quotes**: None / Some / Many — how much of the client's own wording the draft may quote directly.
+- **Session details**: session type (Individual / Couples / Family / Group), modality (In person / Telehealth), and start/end times are captured with the session and carried onto the queue item and the saved note. Brief mode shows a live word counter with a soft ~30-word hint.
+- **For this session only**: one-shot instructions included in a single generation, then cleared.
+- **Example of my writing**: paste one of your own finished notes in Settings and drafts will match its voice and formatting habits — never its content.
+- **Recording auto-stop**: an optional safety net (30 / 45 / 60 / 90 minutes) that stops a recording at the limit.
 - **Output language — your choice, independent of the session language**: follow the transcript, or write the note in English, 简体中文， 繁體中文， Español, 日本語， 한국어, Français, Deutsch, or Português.
 - **Orientation / style field**: e.g. CBT, person-centered, concise — fed into the draft.
 - **Custom template / instructions**: type or paste your own note template or natural-language instructions. It is saved on the device, applies to both recording and summary generation, and takes priority over the preset format wherever the two conflict.
@@ -46,6 +54,8 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 ### Notes
 - All saved notes in one list, filterable by client and searchable.
 - Open and edit any note in its format's section editor; switch formats if needed.
+- The note panel shows a four-step progress indicator (Recorded → Transcribed → Note → Finalized) and tabs for the **Note**, its retained **Transcript** (the source text is kept with the note), **Measures** (the session's MSE), and **Details** (session type, modality, times, origin, timestamps). Each section has its own Copy button.
+- **Finalize**: lock a finished note read-only with one click; **Unlock** returns it to a draft when you need to edit. Finalized notes are the only notes the client case overview is built from.
 - Copy, export as `.txt`, or print / save as PDF.
 
 ### Recording consent
@@ -97,4 +107,4 @@ Murmur also runs on Android (arm64). The Android build bundles the AI engines in
 Murmur is developed by [Mind X Associates](https://mind.us) ([Mind X社区 — 中文](https://mind.us/zh)). The app itself carries the same credit in the sidebar; the link opens the developer site in your browser (the only external link the app allows).
 
 ## Version history
-See `CHANGELOG.md`. Current: **V1.9.0**.
+See `CHANGELOG.md`. Current: **V1.10.0**.
