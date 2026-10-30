@@ -427,7 +427,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('rust: deprecated whisper main binary is not a candidate', !rustSrc.includes('"main.exe"') && !rustSrc.includes('"main"'));
   check('rust: whisper-cli.exe is the Windows whisper candidate', rustSrc.includes('&["whisper-cli.exe"]'));
   check('rust: engine search honors strict candidate priority', rustSrc.includes('for name in names'));
-  check('version V1.10.0 in UI', html.includes('Desktop V1.10.0'));
+  check('version V1.11.0 in UI', html.includes('Desktop V1.11.0'));
 
   // V1.8.0: client default format preselects in the Studio
   w.openClient(clientId);
@@ -617,6 +617,89 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('auto-stop off reads back as 0', w.getAutoStopMinutes() === 0);
   w.closeClientWorkspace();
   check('clients table is accessible again after leaving the workspace', $('clientsTableWrap').style.display !== 'none');
+
+
+  // V1.11.0: onboarding wizard — opens on fresh state; a plain close leaves the pref unset and the banner up
+  check('V1.11 onboarding wizard opens on fresh state', w.eval('obOpen') === true && w.document.getElementById('onboardingOverlay').style.display === 'flex');
+  check('V1.11 onboardingDone unset on fresh state', w.desktopDB.getPref('onboardingDone') === null);
+  check('V1.11 setup banner visible during onboarding', w.document.getElementById('setupBanner').style.display !== 'none');
+  w.closeOnboarding(false);
+  check('V1.11 plain close leaves onboardingDone unset', w.desktopDB.getPref('onboardingDone') === null && w.eval('obOpen') === false);
+  check('V1.11 banner stays after plain close (skip path intact)', w.document.getElementById('setupBanner').style.display !== 'none');
+  w.openOnboarding();
+  check('V1.11 wizard reopens', w.eval('obOpen') === true && w.eval('obStep') === 0);
+
+  // V1.11.0: step 2 (note style) writes the same prefs as the Settings equivalents
+  w.eval('obStep = 1'); w.renderObStep();
+  w.segPick('format', 'dap');
+  check('V1.11 wizard format drives the same Studio control (no separate pref exists)', w.document.getElementById('aiFormat').value === 'dap');
+  w.segPick('detail', 'brief');
+  check('V1.11 wizard detail writes aiDetailLevel', w.desktopDB.getPref('aiDetailLevel') === 'brief');
+  w.segPick('quote', 'many');
+  check('V1.11 wizard quote writes aiQuoteLevel', w.desktopDB.getPref('aiQuoteLevel') === 'many');
+  const obTpl = w.document.getElementById('obCustomTpl'); obTpl.value = 'Wizard instruction text'; w.obCustomTplInput(obTpl);
+  check('V1.11 wizard custom instructions write aiCustomTemplate + mirror the Studio field', w.desktopDB.getPref('aiCustomTemplate') === 'Wizard instruction text' && w.document.getElementById('aiCustomTemplate').value === 'Wizard instruction text');
+  w.segPick('format', 'soap');
+
+  // V1.11.0: step 3 (recording) writes the same prefs as the Studio equivalents
+  w.eval('obStep = 2'); w.renderObStep();
+  const obSrc = w.document.getElementById('obRecSource'); obSrc.value = 'tele'; w.obRecSourceChange(obSrc);
+  check('V1.11 wizard recording source writes aiRecSource', w.desktopDB.getPref('aiRecSource') === 'tele' && w.document.getElementById('aiRecSource').value === 'tele');
+  obSrc.value = 'mic'; w.obRecSourceChange(obSrc);
+  const obStop = w.document.getElementById('obAutoStop'); obStop.value = '60'; w.obAutoStopChange(obStop);
+  check('V1.11 wizard auto-stop writes aiAutoStopMinutes', w.desktopDB.getPref('aiAutoStopMinutes') === '60' && w.getAutoStopMinutes() === 60);
+  obStop.value = '0'; w.obAutoStopChange(obStop);
+  const obDel = w.document.getElementById('obDelAudio'); obDel.checked = false; w.obDelAudioChange(obDel);
+  check('V1.11 wizard audio retention writes aiDelAudio + Studio checkbox', w.desktopDB.getPref('aiDelAudio') === '0' && w.document.getElementById('aiDelAudio').checked === false);
+  obDel.checked = true; w.obDelAudioChange(obDel);
+  check('V1.11 audio retention restores to on', w.desktopDB.getPref('aiDelAudio') === '1' && w.getDelAudioPref() === true);
+
+  // V1.11.0: step 4 (models) reflects engine status; RAM guidance labels + device hint live in Models & Settings
+  w.eval('obStep = 3'); w.renderObStep();
+  check('V1.11 wizard models step shows ready status', w.document.getElementById('obModelsStatus').textContent.includes('ready on this device'));
+  w.showView('models'); await w.desktopDB.flush(); await tick(30);
+  const mb = w.document.getElementById('modelsBody').innerHTML;
+  check('V1.11 both model guidance labels render', mb.includes('Recommended for 16 GB or more') && mb.includes('Better for 8 GB machines'));
+  check('V1.11 device hint line renders', !!w.document.getElementById('modelDeviceHint'));
+  Object.defineProperty(w.navigator, 'deviceMemory', { value: 8, configurable: true });
+  check('V1.11 deviceMemory 8 recommends the larger tier', w.recommendedLlmTier() === 'pro');
+  Object.defineProperty(w.navigator, 'deviceMemory', { value: 4, configurable: true });
+  check('V1.11 deviceMemory 4 recommends the lighter tier', w.recommendedLlmTier() === 'lite');
+  delete w.navigator.deviceMemory;
+  check('V1.11 no deviceMemory signal means no tier', w.recommendedLlmTier() === '');
+  const tierList = [{ id: 'qwen15', tier: 'lite' }, { id: 'qwen3', tier: 'pro' }];
+  check('V1.11 preselect follows the tier on first choice', w.pickPreselectModel(tierList, '', '', 'pro') === 'qwen3');
+  check('V1.11 preselect never overrides a saved model', w.pickPreselectModel(tierList, '', 'qwen15', 'pro') === 'qwen15');
+  check('V1.11 preselect never overrides the current selection', w.pickPreselectModel(tierList, 'qwen15', 'qwen3', 'pro') === 'qwen15');
+
+  // V1.11.0: step 5 creates a real client through saveClient
+  w.eval('obStep = 4'); w.renderObStep();
+  w.document.getElementById('obClientName').value = 'Wizard Client';
+  w.document.getElementById('obClientPronouns').value = 'they/them';
+  await w.obAddClient(); await w.desktopDB.flush();
+  const wizClient = savedState().clients.find(c => c.name === 'Wizard Client');
+  check('V1.11 wizard client created via saveClient', !!wizClient && wizClient.pronouns === 'they/them');
+
+  // V1.11.0: step 6 — sample client created once, brief loads, generation runs the real path
+  w.eval('obStep = 5'); w.renderObStep();
+  const sample1 = await w.ensureSampleClient(); await w.desktopDB.flush();
+  const sample2 = await w.ensureSampleClient(); await w.desktopDB.flush();
+  const demoRows = savedState().clients.filter(c => c.name === 'Sample Client — Demo');
+  check('V1.11 sample client created exactly once', sample1 && sample2 && sample1.id === sample2.id && demoRows.length === 1);
+  w.loadSampleIntoStudio(sample1);
+  check('V1.11 sample brief loaded in Studio brief mode', w.document.getElementById('aiClient').value === sample1.id && w.document.getElementById('aiBrief').value.includes('fictional'));
+  check('V1.11 sample generation branch = generate (fake model present)', w.sampleGenerateBranch() === 'generate');
+  const reviewBefore = w.getReviewDrafts().length;
+  await w.obGenerateSample(); await w.desktopDB.flush(); await tick(30);
+  w.aiPollOnce(); await tick(30); w.aiPollOnce(); await tick(30); await w.desktopDB.flush();
+  check('V1.11 sample note drafted through the real generation path', w.getReviewDrafts().length === reviewBefore + 1 && w.document.getElementById('noteEditorWrap').style.display !== 'none');
+  check('V1.11 finishing the sample marks onboarding done + hides banner', w.desktopDB.getPref('onboardingDone') === '1' && w.document.getElementById('setupBanner').style.display === 'none');
+  w.maybeOpenOnboarding();
+  check('V1.11 wizard stays closed once onboardingDone is set', w.eval('obOpen') === false);
+  w.closeNoteEditor();
+  await w.deleteClientForever(wizClient.id); await w.desktopDB.flush();
+  await w.deleteClientForever(sample1.id); await w.desktopDB.flush();
+  check('V1.11 wizard + sample clients deletable (cleanup path)', savedState().clients.filter(c => c.name === 'Wizard Client' || c.name === 'Sample Client — Demo').length === 0);
 
 
   // Delete flows

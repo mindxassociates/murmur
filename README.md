@@ -2,7 +2,7 @@
 
 *Progress notes that never leave the room.*
 
-**Version 1.10.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
+**Version 1.11.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
 
 Murmur turns therapy sessions into progress notes without anything leaving the computer it runs on. Record a session (with the client's consent) or type a brief summary, transcribe and draft locally, review and edit, then save — the only network use in the whole product is the one-time download of the speech and language models you choose.
 
@@ -19,6 +19,7 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 - **Write all**: generate drafts for the whole queue in one run, then review them one at a time in the editor.
 - **Drafts to review**: every generated draft also lands in a review list on Home until you save or discard it. The Home headline counts both sides — "N notes to write, M to review." — and filter tabs switch between All / To write / To review.
 - **Global search**: one box searches the text of every saved note plus the pending queue's source material, with the matched term highlighted; pending items are labeled as such.
+- **First-run setup wizard**: a skippable six-step guided setup — note style, recording defaults, engine/model status, your first client, and a fictional sample session you can generate a real note from — with a **Finish setup** reminder on Home until it is done, and a **Run setup again** button in Models & Settings.
 
 ### Clients
 - Simple local client list: add, edit, delete (deleting a client also deletes their saved notes).
@@ -47,7 +48,7 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 - **Output language — your choice, independent of the session language**: follow the transcript, or write the note in English, 简体中文， 繁體中文， Español, 日本語， 한국어, Français, Deutsch, or Português.
 - **Orientation / style field**: e.g. CBT, person-centered, concise — fed into the draft.
 - **Custom template / instructions**: type or paste your own note template or natural-language instructions. It is saved on the device, applies to both recording and summary generation, and takes priority over the preset format wherever the two conflict.
-- **Local note drafting** with an on-device language model (llama.cpp; Qwen2.5 1.5B fast / 3B recommended). The result opens as an **unsaved draft** in the note editor — nothing is ever saved without your review.
+- **Local note drafting** with an on-device language model (llama.cpp; Qwen2.5 1.5B fast / 3B recommended). The result opens as an **unsaved draft** in the note editor — nothing is ever saved without your review. Models & Settings labels each note model by the memory it suits (3B: 16 GB or more; 1.5B: better for 8 GB machines) and preselects the one that fits this device on a first choice — a downloaded or previously picked model is never overridden.
 - **Verify note (faithfulness check)**: from the draft, one click runs a second pass of the same local model that compares the draft against its source (transcript or summary) and lists any factual statements the source does not support — each flag quotes the draft text and explains the problem, and can be dismissed. It is advisory only: the same model does the checking, so treat it as a second pair of eyes, not a guarantee. Verifying never changes the draft and is never required before saving.
 - **Cleanup options**: delete the recording right after transcription, and/or delete the transcript (and brief summary) once the note is saved.
 
@@ -107,4 +108,4 @@ Murmur also runs on Android (arm64). The Android build bundles the AI engines in
 Murmur is developed by [Mind X Associates](https://mind.us) ([Mind X社区 — 中文](https://mind.us/zh)). The app itself carries the same credit in the sidebar; the link opens the developer site in your browser (the only external link the app allows).
 
 ## Version history
-See `CHANGELOG.md`. Current: **V1.10.0**.
+See `CHANGELOG.md`. Current: **V1.11.0**.
