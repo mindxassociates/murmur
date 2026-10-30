@@ -32,18 +32,38 @@ if errorlevel 1 (
 
 rem ---------- MSVC build tools (needed by SQLCipher native build) ----------
 where link >nul 2>nul
+if not errorlevel 1 goto :msvc_done
+echo [SETUP] MSVC linker not found. Installing Visual Studio 2022 Build Tools - this is a large one-time download...
+where winget >nul 2>nul
+if errorlevel 1 ( echo [FAIL] Install "Visual Studio 2022 Build Tools" with the C++ workload, then re-run. & pause & exit /b 1 )
+set "BT_TRIES=0"
+:bt_retry
+set /a BT_TRIES+=1
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e --accept-source-agreements --accept-package-agreements --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+if not errorlevel 1 goto :bt_ok
+if !BT_TRIES! GEQ 3 ( echo [FAIL] Build Tools install failed after 3 attempts. & pause & exit /b 1 )
+echo [SETUP] Build Tools install hit a transient error (often MSI error 1618 - another installation is in progress). Waiting 30 seconds and retrying (attempt !BT_TRIES! of 3)...
+timeout /t 30 /nobreak >nul
+goto :bt_retry
+:bt_ok
+echo [SETUP] Build Tools installed. If the build below still cannot find the linker, restart this script once.
+:msvc_done
+
+rem ---------- Perl (needed to compile the bundled SQLCipher OpenSSL) ----------
+where perl >nul 2>nul
 if errorlevel 1 (
-  echo [SETUP] MSVC linker not found. Installing Visual Studio 2022 Build Tools - this is a large one-time download...
+  echo [SETUP] Perl not found. Installing Strawberry Perl via winget...
   where winget >nul 2>nul
-  if errorlevel 1 ( echo [FAIL] Install "Visual Studio 2022 Build Tools" with the C++ workload, then re-run. & pause & exit /b 1 )
-  winget install --id Microsoft.VisualStudio.2022.BuildTools -e --accept-source-agreements --accept-package-agreements --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" || ( echo [FAIL] Build Tools install failed. & pause & exit /b 1 )
-  echo [SETUP] Build Tools installed. If the build below still cannot find the linker, restart this script once.
+  if errorlevel 1 ( echo [FAIL] winget not available. Install Strawberry Perl from https://strawberryperl.com then re-run. & pause & exit /b 1 )
+  winget install --id StrawberryPerl.StrawberryPerl -e --accept-source-agreements --accept-package-agreements || ( echo [FAIL] Perl install failed. & pause & exit /b 1 )
+  set "PATH=C:\Strawberry\perl\bin;%PATH%"
 )
 
 rem ---------- Version consistency ----------
-node -e "const fs=require('fs');const a=require('./package.json').version;const b=require('./src-tauri/tauri.conf.json').version;const c=fs.readFileSync('src-tauri/Cargo.toml','utf8').match(/^version\s*=\s*"([^"]+)"/m)[1];if(a!==b||a!==c){console.error('[FAIL] Version mismatch: package.json='+a+' tauri.conf.json='+b+' Cargo.toml='+c);process.exit(1)}console.log('[OK] Version '+a)"
+rem (standalone scripts only - inline node -e in a .bat gets mangled by cmd parsing)
+node scripts\check-version.cjs
 if errorlevel 1 ( pause & exit /b 1 )
-for /f %%v in ('node -p "require('./package.json').version"') do set "VER=%%v"
+for /f %%v in ('node scripts\print-version.cjs') do set "VER=%%v"
 
 echo [1/4] Installing JavaScript dependencies...
 call npm install || goto :fail
