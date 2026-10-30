@@ -1,4 +1,4 @@
-# Start Here — Murmur V1.8.0
+# Start Here — Murmur V1.9.0
 
 ## Build the app (first time)
 
@@ -10,8 +10,8 @@
 
 1. Launch the app and create your local account (username + a password of at least 10 characters). This password unlocks the encrypted database — there is no way to recover it, so keep it somewhere safe.
 2. Go to **Models & Settings** and download, in order: the Whisper engine (Windows auto-download; on macOS install `whisper-cpp` via Homebrew or set its path), one Whisper model (Small is a good start; Large v3 Turbo is the most accurate), the note engine, and one note model (Qwen2.5 3B recommended).
-3. Add a client under **Clients**.
-4. In **Recording Consent**, print the consent form (English or 中文） and have it signed before you record anyone.
+3. Add a client under **Clients** — the same form records their recording consent (status, method, date).
+4. In **AI Studio**, click **Consent form** next to the consent checkbox to print the bilingual consent form (English or 中文） and have it signed before you record anyone.
 5. In **AI Studio**: pick the client, tick the consent box, record (or import audio), transcribe, tidy the transcript/speaker labels if needed, then generate the draft. Review and edit it in the note editor, then **Save**.
 
 Everything after the model downloads works fully offline.

@@ -130,6 +130,19 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   $('cDefaultFormat').value = '';
   await w.saveClient(); await flush();
   check('client treatment goals persisted', (savedState().clients[0].goals || '').includes('panic episodes'));
+  // V1.9.0: recording-consent record lives in the client dialog
+  w.openClient(clientId);
+  check('client dialog carries the consent record fields', !!$('cConsentStatus') && !!$('cConsentMethod') && !!$('cConsentDate'));
+  $('cConsentStatus').value = 'recorded';
+  $('cConsentMethod').value = 'written';
+  $('cConsentDate').value = '2026-10-29';
+  await w.saveClient(); await flush();
+  const cc = savedState().clients[0];
+  check('consent record persisted on the client', cc.consentStatus === 'recorded' && cc.consentMethod === 'written' && cc.consentDate === '2026-10-29');
+  check('clients table shows the recorded-consent pill', $('clientsTable').innerHTML.includes('pill-sage') && $('clientsTable').innerHTML.includes('Consent recorded'));
+  w.openClient(clientId);
+  check('consent record re-opens populated in the dialog', $('cConsentStatus').value === 'recorded' && $('cConsentMethod').value === 'written' && $('cConsentDate').value === '2026-10-29');
+  $('clientDialog').close();
 
   // Studio controls
   w.showView('studio'); await tick(); await tick();
@@ -337,6 +350,9 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('telehealth source persists + hint explains screen sharing', w.desktopDB.getPref('aiRecSource') === 'tele' && $('aiRecHint').textContent.includes('Entire screen'));
   await w.refreshAudioDevices(false);
   check('device refresh survives missing mediaDevices', $('aiAudioDevice').options.length >= 1);
+  $('aiConsent').checked = false;
+  await w.startRecording();
+  check('recording gate: without consent, recording does not start', w.eval('recState') === null);
   $('aiConsent').checked = true;
   await w.startRecording();
   check('telehealth start without system-audio support alerts and does not record', w.eval('recState') === null);
@@ -381,11 +397,17 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('switching format re-renders SIRP sections', !!w.document.querySelector('textarea[data-seckey="situation"]'));
   w.closeNoteEditor();
 
-  // Consent forms (printable, EN + ZH)
-  w.showView('consent');
-  check('consent EN renders with signature lines', $('consentBody').innerHTML.includes('Informed Consent') && $('consentBody').innerHTML.includes('Client signature'));
+  // Consent (V1.9.0): no standalone tab; the form lives in a Studio-opened dialog,
+  // the per-client record lives in the client dialog.
+  check('nav has exactly five views and no consent tab', w.document.querySelectorAll('nav button[data-view]').length === 5 && !w.document.querySelector('nav button[data-view="consent"]') && !$('consent'));
+  w.openConsentForm();
+  check('consent form opens from Studio into its dialog', $('consentDialog').open === true && $('consentBody').innerHTML.includes('Informed Consent') && $('consentBody').innerHTML.includes('Client signature'));
+  w.setConsentLang('zh');
+  check('consent form dialog switches to the Chinese form', $('consentBody').innerHTML.includes('来访者签字'));
+  w.setConsentLang('en');
   check('consentHtml zh version exists', w.consentHtml('zh').includes('知情同意') && w.consentHtml('zh').includes('来访者签字'));
   check('consent states fully local / offline handling', w.consentHtml('en').includes('fully local, offline'));
+  $('consentDialog').close();
 
   // Models view renders engine + turbo model row
   w.showView('models'); await tick();
@@ -398,7 +420,13 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   const rustSrc = fs.readFileSync(path.join(__dirname, '..', 'src-tauri', 'src', 'lib.rs'), 'utf8');
   check('rust: transcribe_start accepts an optional prompt parameter', /fn transcribe_start\([^)]*prompt: Option<String>/.test(rustSrc));
   check('rust: whisper-cli invocation passes --prompt when a vocabulary is present', rustSrc.includes('arg("--prompt")'));
-  check('version V1.8.0 in UI', html.includes('Desktop V1.8.0'));
+  check('design tokens: warm cream background variable', html.includes('--bg:#f6f3ec'));
+  check('design tokens: sage accent variable', html.includes('--accent:#5c6f60'));
+  check('design tokens: serif display stack variable', html.includes('--font-display:Georgia'));
+  check('rust: deprecated whisper main binary is not a candidate', !rustSrc.includes('"main.exe"') && !rustSrc.includes('"main"'));
+  check('rust: whisper-cli.exe is the Windows whisper candidate', rustSrc.includes('&["whisper-cli.exe"]'));
+  check('rust: engine search honors strict candidate priority', rustSrc.includes('for name in names'));
+  check('version V1.9.0 in UI', html.includes('Desktop V1.9.0'));
 
   // V1.8.0: client default format preselects in the Studio
   w.openClient(clientId);
@@ -415,6 +443,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('queue helpers exist', typeof w.getPendingNotes === 'function' && typeof w.writeAllQueue === 'function' && !!$('queueList'));
   w.getPendingNotes().slice().forEach(p => w.removePendingNote(p.id)); await flush();
   check('queue remove action empties the queue', w.getPendingNotes().length === 0);
+  check('empty queue: headline is the caught-up line and the nav badge hides', $('homeHeadline').textContent === 'All caught up.' && $('navQueueBadge').hidden === true && $('homeDate').textContent.length > 0);
   w.showView('home'); await tick();
   check('home queue empty state explains the queue', $('queueList').innerHTML.includes('Nothing waiting'));
   w.showView('studio');
@@ -437,6 +466,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   w.addPendingNote(clientId, 'transcript', 'Transcript two: client discussed poor sleep and stress at length.', '2026-10-29');
   await flush();
   check('two items queued for Write all', w.getPendingNotes().length === 2);
+  check('nav badge + headline + Write all count the queue', $('navQueueBadge').textContent === '2' && $('navQueueBadge').hidden === false && $('homeHeadline').textContent === '2 notes to write.' && $('writeAllBtn').textContent === 'Write all 2');
   await w.writeAllQueue(); await tick();
   check('Write all generates drafts and opens the first', $('noteEditorWrap').style.display !== 'none' && w.eval('writeAllDrafts').length === 1);
   await w.saveNote(); await flush();

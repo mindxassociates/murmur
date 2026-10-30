@@ -2,7 +2,7 @@
 
 *Progress notes that never leave the room.*
 
-**Version 1.8.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
+**Version 1.9.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
 
 Murmur turns therapy sessions into progress notes without anything leaving the computer it runs on. Record a session (with the client's consent) or type a brief summary, transcribe and draft locally, review and edit, then save — the only network use in the whole product is the one-time download of the speech and language models you choose.
 
@@ -23,6 +23,7 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 - Simple local client list: add, edit, delete (deleting a client also deletes their saved notes).
 - Use real names, initials, or code names — it never leaves the device.
 - **Per-client treatment goals and default format**: record each client's treatment goals and, if you like, their default note format. Selecting the client in AI Studio preselects their format, and generated drafts frame assessment and progress relative to the goals — only where the session source supports it.
+- **Per-client recording-consent record**: each client's consent status, method (verbal or written), and date live on the client record itself, with a status pill in the client list.
 
 ### AI Studio
 - **Ambient recording** in the app (consent checkbox required before the microphone opens), or **import an audio file**.
@@ -48,7 +49,7 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 - Copy, export as `.txt`, or print / save as PDF.
 
 ### Recording consent
-- A printable **informed-consent form for audio recording and computer-generated notes**, in English and 中文， explaining the fully local processing, deletion, and the client's right to decline or withdraw. Print it from the app and have it signed before recording.
+- A printable **informed-consent form for audio recording and computer-generated notes**, in English and 中文， explaining the fully local processing, deletion, and the client's right to decline or withdraw. Open it from the **Consent form** button next to the recording consent checkbox in AI Studio, print it, and have it signed before recording; the signed record (status, method, date) is kept on the client's record under **Clients**.
 
 ### Models & Settings
 - Engine and model status, one-click downloads with progress, cancel, custom engine paths, and importing model files you downloaded yourself (Whisper `.bin`, LLM `.gguf`).
@@ -96,4 +97,4 @@ Murmur also runs on Android (arm64). The Android build bundles the AI engines in
 Murmur is developed by [Mind X Associates](https://mind.us) ([Mind X社区 — 中文](https://mind.us/zh)). The app itself carries the same credit in the sidebar; the link opens the developer site in your browser (the only external link the app allows).
 
 ## Version history
-See `CHANGELOG.md`. Current: **V1.8.0**.
+See `CHANGELOG.md`. Current: **V1.9.0**.

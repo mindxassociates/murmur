@@ -197,12 +197,17 @@ fn pref_value(state: &State<AppState>, key: &str) -> Option<String> {
 }
 fn find_exe(dir: &Path, names: &[&str]) -> Option<PathBuf> {
     if !dir.exists() { return None; }
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        if let Ok(rd) = fs::read_dir(&d) {
-            for e in rd.flatten() {
-                let p = e.path();
-                if p.is_dir() { stack.push(p); } else if let Some(n) = p.file_name().and_then(|x| x.to_str()) { if names.iter().any(|w| *w == n) { return Some(p); } }
+    // Strict candidate priority: exhaust the whole tree for names[0] before
+    // trying names[1], so a preferred binary always wins over a fallback that
+    // merely happens to sit closer to the root of the folder.
+    for name in names {
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(d) = stack.pop() {
+            if let Ok(rd) = fs::read_dir(&d) {
+                for e in rd.flatten() {
+                    let p = e.path();
+                    if p.is_dir() { stack.push(p); } else if p.file_name().and_then(|x| x.to_str()) == Some(name) { return Some(p); }
+                }
             }
         }
     }
@@ -210,7 +215,7 @@ fn find_exe(dir: &Path, names: &[&str]) -> Option<PathBuf> {
 }
 fn resolve_engine(state: &State<AppState>, engines: &Path, which: &str) -> Option<PathBuf> {
     let (pref_key, names): (&str, &[&str]) = if which == "whisper" {
-        ("aiWhisperPath", if cfg!(windows) { &["whisper-cli.exe", "main.exe"] } else if cfg!(target_os = "android") { &["libwhisper-cli.so", "whisper-cli", "main"] } else { &["whisper-cli", "main"] })
+        ("aiWhisperPath", if cfg!(windows) { &["whisper-cli.exe"] } else if cfg!(target_os = "android") { &["libwhisper-cli.so", "whisper-cli"] } else { &["whisper-cli"] })
     } else {
         ("aiLlamaPath", if cfg!(windows) { &["llama-cli.exe"] } else if cfg!(target_os = "android") { &["libllama-cli.so", "llama-cli"] } else { &["llama-cli"] })
     };
@@ -255,7 +260,7 @@ fn model_file(models: &Path, kind: &str, id: &str) -> Option<(String, PathBuf)> 
 fn engine_download_url(which: &str) -> Option<String> {
     let os = std::env::consts::OS; let arch = std::env::consts::ARCH;
     match (which, os) {
-        ("whisper", "windows") => Some("https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip".into()),
+        ("whisper", "windows") => Some("https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.4/whisper-bin-x64.zip".into()),
         ("llama", "windows") => Some("https://github.com/ggml-org/llama.cpp/releases/download/b6123/llama-b6123-bin-win-cpu-x64.zip".into()),
         ("llama", "macos") => Some(format!("https://github.com/ggml-org/llama.cpp/releases/download/b6123/llama-b6123-bin-macos-{}.zip", if arch == "aarch64" { "arm64" } else { "x64" })),
         _ => None,
