@@ -448,6 +448,45 @@ fn audio_finish(ai: State<AiState>, id: String) -> Result<Value, String> {
     let rt = ai.0.lock().unwrap(); let path = rt.audio.get(&id).cloned().ok_or("Recording session not found")?;
     Ok(json!({"path": path.to_string_lossy(), "bytes": path.metadata().map(|m| m.len()).unwrap_or(0)}))
 }
+// Build a finalized copy of an in-progress recording. While recording, the
+// live file starts as one complete WAV (header + first audio) and then grows
+// by raw PCM appends, so its RIFF and data-chunk size fields understate the
+// true length. The copy keeps every audio byte but patches those two fields
+// to the actual sizes, yielding a valid standalone WAV; the input bytes (and
+// the live file they came from) are never modified. Pure function of the
+// bytes so it can be exercised standalone in tests.
+fn finalize_wav_copy(wav: &[u8]) -> Result<Vec<u8>, String> {
+    if wav.len() < 44 || &wav[0..4] != b"RIFF" || &wav[8..12] != b"WAVE" { return Err("Not a WAV recording".into()); }
+    // The data chunk is the final chunk in the recordings this app writes;
+    // everything from its payload start to EOF is audio, whatever the
+    // (stale) declared size says.
+    let mut pos = 12usize;
+    let data_start = loop {
+        if pos + 8 > wav.len() { return Err("WAV has no audio data".into()); }
+        if &wav[pos..pos + 4] == b"data" { break pos + 8; }
+        let size = u32::from_le_bytes([wav[pos + 4], wav[pos + 5], wav[pos + 6], wav[pos + 7]]) as usize;
+        pos += 8 + size + (size % 2);
+    };
+    let mut actual = wav.len() - data_start;
+    actual -= actual % 2; // 16-bit samples: drop a trailing half-sample byte
+    if actual == 0 { return Err("The recording has no audio yet".into()); }
+    let mut out = wav[..data_start + actual].to_vec();
+    let riff_size = (out.len() - 8) as u32;
+    out[4..8].copy_from_slice(&riff_size.to_le_bytes());
+    let size_field = data_start - 4;
+    out[size_field..size_field + 4].copy_from_slice(&(actual as u32).to_le_bytes());
+    Ok(out)
+}
+#[tauri::command]
+fn audio_snapshot(ai: State<AiState>, id: String) -> Result<Value, String> {
+    let path = { let rt = ai.0.lock().unwrap(); rt.audio.get(&id).cloned().ok_or("Recording session not found")? };
+    let data = fs::read(&path).map_err(|e| e.to_string())?;
+    let fixed = finalize_wav_copy(&data)?;
+    let bytes = fixed.len();
+    let snap = path.with_file_name(format!("{}-snap.wav", id));
+    fs::write(&snap, &fixed).map_err(|e| e.to_string())?;
+    Ok(json!({"path": snap.to_string_lossy(), "bytes": bytes}))
+}
 #[tauri::command]
 fn secure_delete_file(p: &Path) {
     // Overwrite the file's bytes with zeros before unlinking, so a deleted
@@ -615,4 +654,4 @@ fn ai_proc_cancel(ai: State<AiState>) -> Result<bool, String> { let rt = ai.0.lo
     } else { Err("External links are disabled in this app".into()) }
 }
 
-pub fn run(){tauri::Builder::default().plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_opener::init()).manage(AppState(Mutex::new(Runtime::default()))).manage(AiState(Mutex::new(AiRuntime::default()))).invoke_handler(tauri::generate_handler![startup_status,startup_setup,startup_login,auth_status,auth_lock,db_get_state,db_set_state,db_list_prefs,db_get_pref,db_set_pref,db_remove_pref,db_info,db_backup,audit_list,audit_verify,audit_event,users_list,users_create,users_set_active,change_password,open_path,open_external,ai_status,ai_download,ai_download_cancel,ai_set_engine_path,ai_import_model,audio_begin,audio_append,audio_finish,audio_discard,transcribe_start,diarize_start,generate_start,ai_proc_poll,ai_proc_cancel]).run(tauri::generate_context!()).expect("error while running Tauri application");}
+pub fn run(){tauri::Builder::default().plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_opener::init()).manage(AppState(Mutex::new(Runtime::default()))).manage(AiState(Mutex::new(AiRuntime::default()))).invoke_handler(tauri::generate_handler![startup_status,startup_setup,startup_login,auth_status,auth_lock,db_get_state,db_set_state,db_list_prefs,db_get_pref,db_set_pref,db_remove_pref,db_info,db_backup,audit_list,audit_verify,audit_event,users_list,users_create,users_set_active,change_password,open_path,open_external,ai_status,ai_download,ai_download_cancel,ai_set_engine_path,ai_import_model,audio_begin,audio_append,audio_finish,audio_snapshot,audio_discard,transcribe_start,diarize_start,generate_start,ai_proc_poll,ai_proc_cancel]).run(tauri::generate_context!()).expect("error while running Tauri application");}

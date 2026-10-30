@@ -14,6 +14,7 @@ let workspaceJson = null;
 let aiProc = null, aiDiscarded = '', lastPrompt = '';
 let lastTranscribeArgs = null, verifyOutput = '[]';
 let lastDiarizeArgs = null; const discardLog = [];
+let audioSeq = 0; const snapshotLog = []; let previewOut = 'Preview line one from the snapshot.'; let failSnapshot = false;
 const prefs = new Map();
 const auditEvents = [];
 let user = null;
@@ -54,9 +55,10 @@ const fakeInvoke = async (cmd, args = {}) => {
     case 'ai_download_cancel': return true;
     case 'ai_set_engine_path': return true;
     case 'ai_import_model': return 'imported.gguf';
-    case 'audio_begin': return { id: 'a1', path: '/fake/ai-audio/a1.wav' };
+    case 'audio_begin': audioSeq++; return { id: 'a' + audioSeq, path: '/fake/ai-audio/a' + audioSeq + '.wav' };
     case 'audio_append': return true;
     case 'audio_finish': return { path: '/fake/ai-audio/a1.wav', bytes: 1234 };
+    case 'audio_snapshot': snapshotLog.push(args.id); if (failSnapshot) throw new Error('snapshot failed (simulated)'); return { path: '/fake/ai-audio/' + args.id + '-snap.wav', bytes: 4321 };
     case 'audio_discard': aiDiscarded = args.path; discardLog.push(args.path); return true;
     case 'transcribe_start': lastTranscribeArgs = args; aiProc = { kind: 'transcribe', n: 0 }; return true;
     case 'diarize_start': lastDiarizeArgs = args; aiProc = { kind: 'diarize', n: 0, combined: !!args.enrollPath }; return { input: args.enrollPath ? '/fake/ai-audio/diarize-combined.wav' : args.audioPath, combined: !!args.enrollPath };
@@ -68,7 +70,9 @@ const fakeInvoke = async (cmd, args = {}) => {
         ? (aiProcCombined ? 'Started\n0.500 -- 27.500 speaker_00\n30.000 -- 34.000 speaker_00\n35.000 -- 39.000 speaker_01\n40.000 -- 44.000 speaker_00\n45.000 -- 49.000 speaker_01'
           : 'Started\n1.000 -- 5.000 speaker_01\n6.000 -- 10.000 speaker_00\n11.000 -- 15.000 speaker_01\n16.000 -- 20.000 speaker_00')
         : kind === 'transcribe'
-        ? (lastTranscribeArgs && lastTranscribeArgs.timestamps
+        ? (lastTranscribeArgs && (lastTranscribeArgs.audioPath || '').includes('-snap')
+          ? previewOut
+          : lastTranscribeArgs && lastTranscribeArgs.timestamps
           ? '[00:00:01.000 --> 00:00:05.000]  I have not been sleeping well and work stress is high.\n[00:00:06.000 --> 00:00:10.000]  We talked about your sleep routine today.\n[00:00:11.000 --> 00:00:15.000]  I tried the wind-down routine twice this week.\n[00:00:16.000 --> 00:00:20.000]  That is good progress. Let us keep it going.'
           : 'I have not been sleeping well and work stress is high.\nWe talked about my sleep routine today.')
         : (customOut !== undefined ? customOut : 'noise<|im_start|>assistant\n{"subjective":"Client reported poor sleep and high work stress","objective":"Client appeared tired but engaged","assessment":"Stress-related insomnia, mild improvement in coping","plan":"Wind-down routine nightly; review sleep next session"}<|im_end|>\nllama_print_timings: total');
@@ -436,7 +440,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('rust: deprecated whisper main binary is not a candidate', !rustSrc.includes('"main.exe"') && !rustSrc.includes('"main"'));
   check('rust: whisper-cli.exe is the Windows whisper candidate', rustSrc.includes('&["whisper-cli.exe"]'));
   check('rust: engine search honors strict candidate priority', rustSrc.includes('for name in names'));
-  check('version V1.12.0 in UI', html.includes('Desktop V1.12.0'));
+  check('version V1.13.0 in UI', html.includes('Desktop V1.13.0'));
 
   // V1.8.0: client default format preselects in the Studio
   w.openClient(clientId);
@@ -774,6 +778,77 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('rust: speaker model pins recorded', rustSrc.includes('sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx') && rustSrc.includes('3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx'));
   check('rust: tar.bz2 extraction + enrollment concat helpers present', rustSrc.includes('fn extract_tar_bz2') && rustSrc.includes('fn concat_wavs'));
   check('rust: diarize flags match the engine CLI', rustSrc.includes('--segmentation.pyannote-model=') && rustSrc.includes('--embedding.model=') && rustSrc.includes('--clustering.num-clusters='));
+
+
+  // V1.13.0: live transcription preview during recording
+  check('rust: audio_snapshot is attributed + registered', /#\[tauri::command\]\nfn audio_snapshot/.test(rustSrc) && rustSrc.includes('audio_finish,audio_snapshot,audio_discard'));
+  check('rust: finalize_wav_copy header-patch helper present', rustSrc.includes('fn finalize_wav_copy'));
+  check('V1.13 preview toggle + pane exist, pane hidden by default', !!$('aiLivePreview') && !!$('aiPreviewText') && $('aiPreviewWrap').style.display === 'none');
+  check('V1.13 preview toggle defaults on (pref unset)', w.getLivePreviewPref() === true && $('aiLivePreview').checked === true);
+  check('V1.13 preview heading carries the final-transcript label', $('aiPreviewWrap').textContent.includes('Live preview'));
+  // Media stubs so a real recording can start under jsdom
+  const fakeStream = { getTracks: () => [{ stop() {} }], getAudioTracks: () => [{}] };
+  Object.defineProperty(w.navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => fakeStream, enumerateDevices: async () => [] } });
+  w.AudioContext = class { constructor() { this.sampleRate = 48000; this.state = 'running'; } createScriptProcessor() { return { connect() {}, disconnect() {}, onaudioprocess: null }; } createMediaStreamSource() { return { connect() {} }; } createMediaStreamDestination() { return { stream: fakeStream }; } async close() {} };
+  w.showView('studio'); await tick();
+  $('aiClient').value = clientId;
+  $('aiConsent').checked = true;
+  $('aiRecSource').value = 'mic';
+  $('aiLivePreview').disabled = false;
+  $('aiTranscript').value = '';
+  const snapsBefore = snapshotLog.length;
+  await w.startRecording(); await tick(60);
+  check('V1.13 recording started (preview session live)', !!w.eval('recState') && !!w.eval('previewSession'));
+  const liveId1 = w.eval('recState.liveId'), livePath1 = w.eval('recState.livePath');
+  check('V1.13 live mirror session opened for the preview', !!liveId1 && !!livePath1);
+  w.eval('recState.chunks.push(new Int16Array(16000).fill(120))');
+  previewOut = 'Preview first pass: client describes poor sleep.';
+  await w.previewCycle(); w.eval('clearInterval(aiPollTimer)');
+  check('V1.13 preview cycle snapshotted the live recording', snapshotLog.length === snapsBefore + 1 && snapshotLog[snapshotLog.length - 1] === liveId1);
+  check('V1.13 preview transcription targeted the snapshot with the selected model', !!lastTranscribeArgs && (lastTranscribeArgs.audioPath || '').includes('-snap.wav') && lastTranscribeArgs.model === $('aiWhisperModel').value);
+  await w.aiPollOnce(); await w.aiPollOnce(); await tick();
+  check('V1.13 preview pane populated from the snapshot transcription', $('aiPreviewText').value.includes('Preview first pass'));
+  check('V1.13 preview pane visible while recording', $('aiPreviewWrap').style.display === 'block');
+  check('V1.13 preview never touches the real transcript box', $('aiTranscript').value === '');
+  check('V1.13 snapshot file discarded after its preview landed', discardLog.includes('/fake/ai-audio/' + liveId1 + '-snap.wav'));
+  w.eval('recState.chunks.push(new Int16Array(16000).fill(90))');
+  previewOut = 'Preview second pass: sleep and work stress discussed.';
+  await w.previewCycle(); w.eval('clearInterval(aiPollTimer)');
+  await w.aiPollOnce(); await w.aiPollOnce(); await tick();
+  check('V1.13 second preview cycle replaces the pane text', $('aiPreviewText').value.includes('Preview second pass') && !$('aiPreviewText').value.includes('first pass'));
+  await w.stopRecording(); await tick(60);
+  check('V1.13 stop hides + clears the preview pane', $('aiPreviewWrap').style.display === 'none' && $('aiPreviewText').value === '');
+  check('V1.13 stop discards the live mirror file', discardLog.includes(livePath1));
+  check('V1.13 normal recording uploaded on stop', w.eval('aiAudioPath') === '/fake/ai-audio/a1.wav');
+  await w.startTranscribe(); await tick();
+  await w.aiPollOnce(); await w.aiPollOnce(); await tick();
+  check('V1.13 authoritative transcript lands after stop (preview discarded)', $('aiTranscript').value.includes('sleeping well') && $('aiPreviewText').value === '');
+  // Toggle off: no mirror session, no snapshots
+  $('aiLivePreview').checked = false; w.setLivePreviewPref(false);
+  const seqBeforeOff = audioSeq, snapsBeforeOff = snapshotLog.length;
+  await w.startRecording(); await tick(60);
+  w.eval('recState.chunks.push(new Int16Array(16000).fill(70))');
+  await w.previewCycle();
+  check('V1.13 toggle off: no live mirror session and no snapshot calls', audioSeq === seqBeforeOff && snapshotLog.length === snapsBeforeOff && w.eval('previewSession') === null);
+  await w.stopRecording(); await tick(60);
+  $('aiLivePreview').checked = true; w.setLivePreviewPref(true);
+  check('V1.13 toggle restored on + pref persisted', w.desktopDB.getPref('aiLivePreview') === '1');
+  // Preview failure is silent and leaves the recording untouched
+  failSnapshot = true;
+  const snapsBeforeFail = snapshotLog.length;
+  await w.startRecording(); await tick(60);
+  w.eval('recState.chunks.push(new Int16Array(16000).fill(60))');
+  await w.previewCycle(); await tick();
+  check('V1.13 failed snapshot skipped silently, recording state untouched', snapshotLog.length === snapsBeforeFail + 1 && !!w.eval('recState') && w.eval('previewBusy') === false && $('aiPreviewWrap').style.display === 'none');
+  failSnapshot = false;
+  await w.stopRecording(); await tick(60);
+  // Wizard recording step mirrors the same toggle
+  w.eval('obStep=2'); w.renderObStep();
+  check('V1.13 wizard recording step carries the preview toggle', !!$('obLivePreview') && $('obLivePreview').checked === true);
+  const obLp = $('obLivePreview'); obLp.checked = false; w.obLivePreviewChange(obLp);
+  check('V1.13 wizard toggle drives the Studio toggle + pref', $('aiLivePreview').checked === false && w.desktopDB.getPref('aiLivePreview') === '0');
+  obLp.checked = true; w.obLivePreviewChange(obLp);
+  check('V1.13 wizard toggle restores the pref', w.desktopDB.getPref('aiLivePreview') === '1' && $('aiLivePreview').checked === true);
 
 
   // Delete flows
