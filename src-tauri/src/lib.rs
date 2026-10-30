@@ -221,7 +221,8 @@ fn resolve_engine(state: &State<AppState>, engines: &Path, which: &str) -> Optio
     // allows executing binaries from). Files in the app-data engines folder
     // are found by the scan above, but Android 10+ may refuse to execute
     // them; the bundled copies below are the supported path.
-    if cfg!(target_os = "android") {
+    #[cfg(target_os = "android")]
+    {
         if let Some(dir) = android_native_lib_dir() {
             let p = dir.join(names[0]);
             if p.exists() { return Some(p); }
@@ -387,6 +388,7 @@ fn secure_delete_file(p: &Path) {
     let _ = fs::remove_file(p);
 }
 
+#[tauri::command]
 fn audio_discard(state: State<AppState>, path: String) -> Result<bool, String> {
     let (_m, _e, audio) = ai_dirs(&state)?;
     let p = PathBuf::from(&path); if p.starts_with(&audio) { secure_delete_file(&p); } Ok(true)
