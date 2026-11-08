@@ -14,6 +14,7 @@ let workspaceJson = null;
 let aiProc = null, aiDiscarded = '', lastPrompt = '';
 let lastTranscribeArgs = null, verifyOutput = '[]';
 let lastDiarizeArgs = null; const discardLog = [];
+let genBehavior = null, procCancelCount = 0;
 let audioSeq = 0; const snapshotLog = []; let previewOut = 'Preview line one from the snapshot.'; let failSnapshot = false;
 const prefs = new Map();
 const auditEvents = [];
@@ -62,9 +63,10 @@ const fakeInvoke = async (cmd, args = {}) => {
     case 'audio_discard': aiDiscarded = args.path; discardLog.push(args.path); return true;
     case 'transcribe_start': lastTranscribeArgs = args; aiProc = { kind: 'transcribe', n: 0 }; return true;
     case 'diarize_start': lastDiarizeArgs = args; aiProc = { kind: 'diarize', n: 0, combined: !!args.enrollPath }; return { input: args.enrollPath ? '/fake/ai-audio/diarize-combined.wav' : args.audioPath, combined: !!args.enrollPath };
-    case 'generate_start': lastPrompt = args.prompt; aiProc = { kind: 'generate', n: 0, out: args.prompt.includes('VERIFY NOTE AGAINST SOURCE') ? verifyOutput : undefined }; return true;
+    case 'generate_start': lastPrompt = args.prompt; aiProc = { kind: 'generate', n: 0, gen: genBehavior, out: args.prompt.includes('VERIFY NOTE AGAINST SOURCE') ? verifyOutput : undefined }; return true;
     case 'ai_proc_poll': { if (!aiProc) return { active: false, kind: '', done: true, output: '', progress: -1 };
-      aiProc.n++; if (aiProc.n < 2) return { active: true, kind: aiProc.kind, done: false, progress: 50, output: '' };
+      aiProc.n++; if (aiProc.gen) { const r = aiProc.gen(aiProc.n); if (r) { if (r.done) aiProc = null; return r; } }
+      if (aiProc.n < 2) return { active: true, kind: aiProc.kind, done: false, progress: 50, output: '' };
       const kind = aiProc.kind; const customOut = aiProc.out; const aiProcCombined = !!aiProc.combined; aiProc = null;
       const output = kind === 'diarize'
         ? (aiProcCombined ? 'Started\n0.500 -- 27.500 speaker_00\n30.000 -- 34.000 speaker_00\n35.000 -- 39.000 speaker_01\n40.000 -- 44.000 speaker_00\n45.000 -- 49.000 speaker_01'
@@ -77,7 +79,7 @@ const fakeInvoke = async (cmd, args = {}) => {
           : 'I have not been sleeping well and work stress is high.\nWe talked about my sleep routine today.')
         : (customOut !== undefined ? customOut : 'noise<|im_start|>assistant\n{"subjective":"Client reported poor sleep and high work stress","objective":"Client appeared tired but engaged","assessment":"Stress-related insomnia, mild improvement in coping","plan":"Wind-down routine nightly; review sleep next session"}<|im_end|>\nllama_print_timings: total');
       return { active: false, kind, done: true, progress: 100, output }; }
-    case 'ai_proc_cancel': aiProc = null; return true;
+    case 'ai_proc_cancel': procCancelCount++; aiProc = null; return true;
     case 'open_external': throw new Error('External links are disabled in this app');
     default: throw new Error('unknown command ' + cmd);
   }
@@ -259,7 +261,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('problem focus sits inside corpus after modality frames, before response', probPrompt.indexOf('Problem focus') > probPrompt.indexOf('CLINICAL LANGUAGE CORPUS') && probPrompt.indexOf('Problem focus') < probPrompt.indexOf('Client response:'));
   const calmPrompt = w.buildNotePrompt('Client talked about their week, weekend plans, and scheduling for next time.', 'brief');
   check('no keyword hits: no Problem focus subsection', !calmPrompt.includes('Problem focus'));
-  w.openNote(); await tick();
+  await tick();
   check('phrase panel exists in note editor', !!$('phrasePanel'));
   w.togglePhrasePanel();
   check('phrase panel renders My phrases + standard + problem groups', $('phrasePanel').innerHTML.includes('My phrases') && $('phrasePanel').innerHTML.includes('Socratic questioning') && $('phrasePanel').innerHTML.includes('catastrophic predictions maintaining their anxiety'));
@@ -271,7 +273,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('favorite appears in My phrases section', $('myPhraseList').innerHTML.includes('relaxation and breathing skills'));
   $('customPhraseInput').value = 'Client smiled for the first time in several weeks.';
   w.addCustomPhrase(); await flush();
-  check('custom phrase persists to corpusCustomPhrases pref', (JSON.parse(w.desktopDB.getPref('corpusCustomPhrases') || '[]')).includes('Client smiled for the first time in several weeks.'));
+  check('custom phrase persists to corpusCustomPhrases pref (V1.15 object shape)', (JSON.parse(w.desktopDB.getPref('corpusCustomPhrases') || '[]')).some(e => (typeof e === 'string' ? e : e.text) === 'Client smiled for the first time in several weeks.'));
   check('custom phrase appears in My phrases section', $('myPhraseList').innerHTML.includes('Client smiled for the first time'));
   const minePrompt = w.buildNotePrompt('Client reported poor sleep and work stress.', 'brief');
   check('prompt carries preferred-phrasing subsection with favorite + custom', minePrompt.includes("Therapist's own preferred phrasing") && minePrompt.includes('relaxation and breathing skills') && minePrompt.includes('Client smiled for the first time in several weeks.'));
@@ -285,7 +287,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('phrase click inserts into the single note box at the caret', noteBox.value.slice(caret, caret + 20).includes('Therapist taught') && noteBox.value.includes('relaxation and breathing skills to reduce physiological arousal'));
   check('i18n dictionaries keep EN/ZH key parity', JSON.stringify(Object.keys(w.eval('I18N.en')).sort()) === JSON.stringify(Object.keys(w.eval('I18N.zh')).sort()));
   $('aiOrientation').value = '';
-  await w.aiPollOnce(); await w.aiPollOnce();
+  await tick();
   const subj = $('nText');
   check('generated note lands in ONE text box with section heading lines', subj && subj.value.includes('poor sleep') && subj.value.includes('Subjective (S):') && subj.value.includes('Plan (P):') && w.document.querySelectorAll('#nSections textarea').length === 1);
   check('note editor opened as unsaved draft', $('noteEditorWrap').style.display !== 'none' && savedState().sessions.length === 0);
@@ -445,7 +447,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('rust: deprecated whisper main binary is not a candidate', !rustSrc.includes('"main.exe"') && !rustSrc.includes('"main"'));
   check('rust: whisper-cli.exe is the Windows whisper candidate', rustSrc.includes('&["whisper-cli.exe"]'));
   check('rust: engine search honors strict candidate priority', rustSrc.includes('for name in names'));
-  check('version V1.14.0 in UI', html.includes('Desktop V1.14.0'));
+  check('version V1.15.0 in UI', html.includes('Desktop V1.15.0'));
 
   // V1.8.0: client default format preselects in the Studio
   w.openClient(clientId);
@@ -925,6 +927,152 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   w.segPick('recSource', 'mic');
   check('V1.14 source seg switches back to microphone', $('aiRecSource').value === 'mic' && w.desktopDB.getPref('aiRecSource') === 'mic');
 
+
+
+  // ================= V1.15.0 =================
+  // WS1: generation waits — feedback, stall rule, cancel, error passthrough.
+  const alertLog = [];
+  w.alert = (m) => { alertLog.push(String(m)); };
+  w.eval('GEN_WAIT.pollMs=10');
+  w.showView('home'); await tick();
+  w.getPendingNotes().slice().forEach(p2 => w.removePendingNote(p2.id)); await flush();
+  check('V1.15 shared wait helper + Home status/cancel UI exist', typeof w.waitForGeneration === 'function' && !!$('homeGenStatus') && !!$('homeGenCancel'));
+  check('V1.15 the old fixed-count timeout error is gone from the UI code', !html.includes('generation timed out'));
+
+  // WS1a: slow generation (engine finishes at poll ~400, output keeps growing)
+  // — the exact failure mode Tim hit — now completes from the Home Write button.
+  const SLOW_OUT = 'noise<|im_start|>assistant\n{"subjective":"SLOW NOTE MARKER","objective":"o","assessment":"a","plan":"p"}<|im_end|>';
+  genBehavior = (n) => n >= 400 ? { active: false, kind: 'generate', done: true, progress: 100, output: SLOW_OUT } : { active: true, kind: 'generate', done: false, progress: Math.min(99, n / 4), output: 'x'.repeat(n * 10) };
+  const slowId = w.addPendingNote(clientId, 'brief', 'Slow generation source text.', '2026-10-30'); await flush();
+  const slowP = w.writeNoteFromQueue(slowId); await tick(150);
+  check('V1.15 slow write: clicked button enters a busy state (disabled, Writing label)', [...$('queueList').querySelectorAll('button')].some(b => b.disabled && b.textContent.includes('Writing')));
+  check('V1.15 slow write: status line shows live elapsed seconds', $('homeGenStatus').style.display !== 'none' && /sec/.test($('homeGenStatusText').textContent));
+  await slowP; await tick();
+  check('V1.15 slow generation completes — no timeout error, draft opens', $('noteEditorWrap').style.display !== 'none' && $('nText').value.includes('SLOW NOTE MARKER') && !alertLog.some(a => a.includes('timed out')));
+  check('V1.15 busy state cleared after success', $('homeGenStatus').style.display === 'none' && w.eval('homeGenToken') === null);
+  w.closeNoteEditor();
+  { const rd = w.getReviewDrafts().find(d => d.queueId === slowId); if (rd) w.discardReviewDraft(rd.id); w.removePendingNote(slowId); await flush(); }
+  genBehavior = null;
+
+  // WS1b: cancel mid-wait resolves quietly and frees the engine slot.
+  genBehavior = (n) => ({ active: true, kind: 'generate', done: false, progress: 10, output: 'x'.repeat(n * 5) });
+  const cancelId = w.addPendingNote(clientId, 'brief', 'Cancel test source.', '2026-10-30'); await flush();
+  alertLog.length = 0; procCancelCount = 0;
+  const cancelP = w.writeNoteFromQueue(cancelId); await tick(150);
+  check('V1.15 cancel: a wait is running before the cancel', w.eval('homeGenToken') !== null);
+  w.cancelHomeGeneration(); await cancelP; await tick();
+  check('V1.15 cancel resolves quietly (no error alert, no editor opened)', alertLog.length === 0 && $('noteEditorWrap').style.display === 'none');
+  check('V1.15 cancel freed the engine slot + cleared busy state', procCancelCount >= 1 && w.eval('homeGenToken') === null && $('homeGenStatus').style.display === 'none');
+  genBehavior = null;
+  await w.writeNoteFromQueue(cancelId); await tick();
+  check('V1.15 a generation after the cancel succeeds on the freed slot', $('noteEditorWrap').style.display !== 'none');
+  w.closeNoteEditor();
+  { const rd = w.getReviewDrafts().find(d => d.queueId === cancelId); if (rd) w.discardReviewDraft(rd.id); w.removePendingNote(cancelId); await flush(); }
+
+  // WS1c: a frozen engine (no progress, no output growth) trips the stall path.
+  w.eval('GEN_WAIT.stallMs=400');
+  genBehavior = (n) => ({ active: true, kind: 'generate', done: false, progress: -1, output: '' });
+  const stallId = w.addPendingNote(clientId, 'brief', 'Stall test source.', '2026-10-30'); await flush();
+  alertLog.length = 0; procCancelCount = 0;
+  await w.writeNoteFromQueue(stallId); await tick();
+  check('V1.15 stalled wait surfaces the no-output message (not a timeout)', alertLog.some(a => a.includes('no new output for 3 minutes')) && !alertLog.some(a => a.includes('generation timed out')));
+  check('V1.15 stall freed the engine slot + cleared busy state', procCancelCount >= 1 && w.eval('homeGenToken') === null);
+  w.removePendingNote(stallId); await flush();
+  w.eval('GEN_WAIT.stallMs=180000');
+  genBehavior = null;
+
+  // WS1d: engine errors pass through verbatim.
+  genBehavior = (n) => n >= 2 ? { active: false, kind: 'generate', done: true, progress: 100, output: '', error: 'engine exploded: bad model file' } : { active: true, kind: 'generate', done: false, progress: 20, output: '' };
+  const errId = w.addPendingNote(clientId, 'brief', 'Error test source.', '2026-10-30'); await flush();
+  alertLog.length = 0;
+  await w.writeNoteFromQueue(errId); await tick();
+  check('V1.15 engine error text reaches the user verbatim', alertLog.some(a => a.includes('engine exploded: bad model file')));
+  check('V1.15 engine error clears busy state', w.eval('homeGenToken') === null && $('homeGenStatus').style.display === 'none');
+  w.removePendingNote(errId); await flush();
+  genBehavior = null;
+
+  // WS1e: the Studio path completes through the same shared wait.
+  w.showView('studio');
+  $('aiClient').value = clientId;
+  $('aiBrief').value = 'Studio unified wait source text.';
+  const revBefore15 = w.getReviewDrafts().length;
+  await w.generateNote('brief'); await tick();
+  check('V1.15 Studio generation completes via the shared wait (draft opens, token cleared)', $('noteEditorWrap').style.display !== 'none' && w.getReviewDrafts().length === revBefore15 + 1 && w.eval('studioGenToken') === null);
+  w.closeNoteEditor();
+  w.getPendingNotes().filter(p2 => p2.source === 'Studio unified wait source text.').forEach(p2 => w.removePendingNote(p2.id));
+  { const rd = w.getReviewDrafts()[w.getReviewDrafts().length - 1]; if (rd) w.discardReviewDraft(rd.id); await flush(); }
+
+  // WS1f: Write all over two items shows per-item status and finishes both.
+  genBehavior = (n) => n >= 30 ? { active: false, kind: 'generate', done: true, progress: 100, output: 'noise<|im_start|>assistant\n{"subjective":"WA MARKER","objective":"o","assessment":"a","plan":"p"}<|im_end|>' } : { active: true, kind: 'generate', done: false, progress: n * 3, output: 'x'.repeat(n * 20) };
+  const wa1 = w.addPendingNote(clientId, 'brief', 'Write-all item one source.', '2026-10-30');
+  const wa2 = w.addPendingNote(clientId, 'brief', 'Write-all item two source.', '2026-10-30');
+  await flush();
+  alertLog.length = 0;
+  const waP = w.writeAllQueue(); await tick(120);
+  check('V1.15 Write all shows per-item status while running', /of 2/.test($('writeAllStatus').textContent) || /of 2/.test($('homeGenStatusText').textContent));
+  await waP; await tick();
+  check('V1.15 Write all finished both drafts (first open, second queued)', $('noteEditorWrap').style.display !== 'none' && w.eval('writeAllDrafts').length === 1 && alertLog.length === 0);
+  w.closeNoteEditor();
+  [wa1, wa2].forEach(qid => { const rd = w.getReviewDrafts().find(d => d.queueId === qid); if (rd) w.discardReviewDraft(rd.id); w.removePendingNote(qid); });
+  w.eval('writeAllDrafts=[]');
+  genBehavior = null;
+  w.eval('GEN_WAIT.pollMs=150');
+
+  // WS2: custom-phrase storage migration (legacy strings -> {text, shortcut}).
+  w.desktopDB.setPref('corpusCustomPhrases', JSON.stringify(['Legacy phrase one kept verbatim.', 'Second legacy phrase.']));
+  w.eval('corpusCustomCache=null;corpusCustomMigrated=false');
+  const mig = w.getCorpusCustom();
+  check('V1.15 migration converts legacy strings with text intact', mig.length === 2 && mig[0].text === 'Legacy phrase one kept verbatim.' && mig[0].shortcut === '' && mig[1].text === 'Second legacy phrase.');
+  check('V1.15 migration rewrites the stored pref in the object shape', (JSON.parse(w.desktopDB.getPref('corpusCustomPhrases'))).every(e => typeof e === 'object' && typeof e.text === 'string'));
+  w.renderPhrasePanel();
+  $('customPhraseInput').value = 'Client used the grounding exercise before bed.';
+  $('customPhraseShortcut').value = 'grnd';
+  w.addCustomPhrase(); await flush();
+  check('V1.15 custom phrase added through the UI stores its shortcut', (w.getCorpusCustom().find(c => c.shortcut === 'grnd') || {}).text === 'Client used the grounding exercise before bed.');
+  check('V1.15 prompt append still carries custom phrase texts', w.buildNotePrompt('Client reported poor sleep.', 'brief').includes('Client used the grounding exercise before bed.'));
+
+  // WS2: type-to-insert in the note box.
+  w.openNote(); await tick();
+  const nb = $('nText');
+  const typeIn = async (ta, val) => { ta.value = val; ta.focus(); ta.setSelectionRange(val.length, val.length); ta.dispatchEvent(new w.Event('input', { bubbles: true })); await tick(); };
+  await typeIn(nb, 'Session notes.\n/relax');
+  check('V1.15 slash opens the phrase menu with matches from the library', $('phraseMenu').style.display === 'block' && $('phraseMenu').textContent.includes('relaxation') && $('phraseMenu').textContent.includes('Library'));
+  nb.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await tick();
+  check('V1.15 Enter inserts the FULL phrase and removes the trigger', nb.value.includes('Therapist taught the client relaxation and breathing skills to reduce physiological arousal when anxiety escalates.') && !nb.value.includes('/relax') && $('phraseMenu').style.display === 'none');
+  await typeIn(nb, '/affect');
+  nb.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await tick();
+  check('V1.15 insertion auto-selects the first [bracketed] fill-in slot', nb.value.indexOf('Client presented with [affect]') === 0 && nb.value.slice(nb.selectionStart, nb.selectionEnd) === '[affect]');
+  await typeIn(nb, 'The client said grnd');
+  check('V1.15 a custom shortcut typed as a whole word opens the menu pre-filtered', $('phraseMenu').style.display === 'block' && $('phraseMenu').querySelectorAll('.pm-row').length === 1 && $('phraseMenu').textContent.includes('grnd'));
+  nb.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await tick();
+  check('V1.15 shortcut insertion replaces the word with the full phrase', nb.value === 'The client said Client used the grounding exercise before bed.' && $('phraseMenu').style.display === 'none');
+  await typeIn(nb, 'The client said zzzz');
+  check('V1.15 a word with no shortcut does not open the menu', $('phraseMenu').style.display === 'none');
+  await typeIn(nb, 'Dose 3/4');
+  check('V1.15 a slash between digits (3/4) never opens the menu', $('phraseMenu').style.display === 'none');
+  nb.dispatchEvent(new w.Event('compositionstart', { bubbles: true }));
+  await typeIn(nb, '/relax');
+  check('V1.15 IME composition never opens the menu', $('phraseMenu').style.display === 'none');
+  nb.dispatchEvent(new w.Event('compositionend', { bubbles: true }));
+  w.closeNoteEditor();
+
+  // WS2: the menu also serves the brief box; Escape dismisses without inserting.
+  w.showView('studio');
+  const bb = $('aiBrief');
+  await typeIn(bb, '/relax');
+  check('V1.15 the menu serves the brief box too', $('phraseMenu').style.display === 'block' && $('phraseMenu').textContent.includes('relaxation'));
+  bb.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await tick();
+  check('V1.15 Escape dismisses without inserting', $('phraseMenu').style.display === 'none' && bb.value === '/relax');
+  bb.value = '';
+
+  // WS2: compact panel rows — a >100-char phrase renders a truncated one-line preview.
+  const LONGP = 'This is a deliberately long custom phrase that runs well beyond one hundred characters so the compact row has to truncate its visible preview text.';
+  w.saveCorpusCustom(w.getCorpusCustom().concat([{ text: LONGP, shortcut: 'lng' }]));
+  $('phrasePanel').style.display = 'block'; w.renderPhrasePanel();
+  const longRow = [...$('phrasePanel').querySelectorAll('.phrase-row')].find(r => { const b = r.querySelector('[data-act="insert"]'); return b && b.getAttribute('title') === LONGP; });
+  check('V1.15 panel row preview is single-line truncated for a >100-char phrase', !!longRow && longRow.querySelector('[data-act="insert"]').textContent.trim().length < LONGP.length && !longRow.querySelector('[data-act="insert"]').textContent.includes('truncate its visible preview text'));
+  check('V1.15 the full phrase text is available in the row title attribute', !!longRow && longRow.querySelector('[data-act="insert"]').getAttribute('title') === LONGP);
+  check('V1.15 custom row carries its shortcut badge + shortcut editor', !!longRow && longRow.textContent.includes('lng') && !!longRow.querySelector('input[data-sc-for]'));
 
   // Delete flows
   const noteId = savedState().sessions[0].id;
