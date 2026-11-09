@@ -357,7 +357,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('clients heading renders Chinese', $('clients').querySelector('[data-i="clientsTitle"]').textContent === '来访者');
   check('html lang attribute switches to zh-CN', w.document.documentElement.lang === 'zh-CN');
   check('developer credit switches to Mind X社区 + /zh URL', $('devLink').textContent === 'Mind X社区' && $('devLink').href === 'https://mind.us/zh');
-  check('notes table headers render Chinese', $('notesList').innerHTML.includes('日期') && $('notesList').innerHTML.includes('预览'));
+  check('notes table headers render Chinese', $('notesList').innerHTML.includes('日期') && $('notesList').innerHTML.includes('来访者'));
   check('security panel renders Chinese', $('models').innerHTML.includes('安全与 HIPAA 保障'));
   check('note editor buttons render Chinese', w.document.querySelector('[data-i="saveNote"]').textContent === '保存记录' && w.document.querySelector('[data-i="copyNote"]').textContent === '复制' && w.document.querySelector('[data-i="printNote"]').textContent === '打印 / PDF');
   w.toggleUiLang(); await tick(60); await flush();
@@ -447,7 +447,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('rust: deprecated whisper main binary is not a candidate', !rustSrc.includes('"main.exe"') && !rustSrc.includes('"main"'));
   check('rust: whisper-cli.exe is the Windows whisper candidate', rustSrc.includes('&["whisper-cli.exe"]'));
   check('rust: engine search honors strict candidate priority', rustSrc.includes('for name in names'));
-  check('version V1.15.0 in UI', html.includes('Desktop V1.15.0'));
+  check('version V1.16.0 in UI', html.includes('Desktop V1.16.0'));
 
   // V1.8.0: client default format preselects in the Studio
   w.openClient(clientId);
@@ -771,7 +771,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   w.eval("aiStatusCache={os:'windows',whisper:{found:true,path:'/fake/whisper-cli'},llama:{found:true,path:'/fake/llama-cli'},diarize:{found:false,path:''},models:[],modelsDir:'/fake',enginesDir:'/fake',download:null,proc:null}");
   check('V1.12 missing engine reported by setup state', w.diarizeSetupState().ok === false && w.diarizeSetupState().missing.includes('engine') && w.diarizeSetupState().missing.includes('models'));
   w.showDiarizePanel();
-  check('V1.12 missing setup panel explains + routes to Models', $('diarizePanel').textContent.includes('speaker separation engine is not installed') && $('diarizePanel').textContent.includes('Open Models & Settings'));
+  check('V1.12 missing setup panel explains + routes to Models', $('diarizePanel').textContent.includes('speaker separation engine is not installed') && $('diarizePanel').textContent.includes('Open Settings'));
   // Android: the feature hides behind the desktop-engines pattern
   w.eval("aiStatusCache={os:'android',whisper:{found:true,path:'x'},llama:{found:true,path:'x'},diarize:{found:false,path:''},models:[],modelsDir:'',enginesDir:'',download:null,proc:null}");
   w.updateDiarizeUi();
@@ -1073,6 +1073,70 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('V1.15 panel row preview is single-line truncated for a >100-char phrase', !!longRow && longRow.querySelector('[data-act="insert"]').textContent.trim().length < LONGP.length && !longRow.querySelector('[data-act="insert"]').textContent.includes('truncate its visible preview text'));
   check('V1.15 the full phrase text is available in the row title attribute', !!longRow && longRow.querySelector('[data-act="insert"]').getAttribute('title') === LONGP);
   check('V1.15 custom row carries its shortcut badge + shortcut editor', !!longRow && longRow.textContent.includes('lng') && !!longRow.querySelector('input[data-sc-for]'));
+
+  // ================= V1.16.0 =================
+  // A simpler, friendlier interface: plain nav labels, a subtitle on every
+  // view, Home action tiles, Studio record/brief tabs, the editor's More
+  // actions disclosure, regrouped Settings, and empty states with actions.
+  w.showView('home'); await tick();
+  const navEn = [...w.document.querySelectorAll('nav button[data-view]')].map(b => b.textContent.replace(/\s+/g, ' ').trim());
+  check('V1.16 nav shows the five plain labels (EN)', navEn[0].startsWith('Home') && navEn[1] === 'Clients' && navEn[2] === 'Write a note' && navEn[3] === 'Notes' && navEn[4] === 'Settings');
+  check('V1.16 every view carries a plain-language subtitle', ['home', 'clients', 'studio', 'notes', 'models'].every(id => { const s = $(id).querySelector('.view-sub'); return s && s.textContent.trim().length > 0; }));
+  const tiles = [...w.document.querySelectorAll('.action-tile')];
+  check('V1.16 home has both action tiles', tiles.length === 2);
+  tiles[0].click(); await tick();
+  check('V1.16 Record tile lands on Studio in record mode', $('studio').classList.contains('active') && $('studioModeRecord').style.display !== 'none' && $('studioModeBrief').style.display === 'none');
+  w.showView('home'); await tick();
+  tiles[1].click(); await tick();
+  check('V1.16 Add-a-client tile opens the client dialog', $('clientDialog').open === true);
+  $('clientDialog').close();
+  w.showView('studio'); await tick();
+  w.setStudioMode('brief'); await tick();
+  check('V1.16 brief tab shows the summary panel only', $('studioModeBrief').style.display !== 'none' && $('studioModeRecord').style.display === 'none' && $('studioTabBriefBtn').classList.contains('on'));
+  w.setStudioMode('record'); await tick();
+  check('V1.16 record tab restores the record panel', $('studioModeRecord').style.display !== 'none' && $('studioModeBrief').style.display === 'none' && $('studioTabRecordBtn').classList.contains('on'));
+  const step3Card = [...$('studio').querySelectorAll('.card')].find(c => !!c.querySelector('button[onclick*="generateNote"]'));
+  check('V1.16 Step 3 keeps exactly one primary (Write my note)', !!step3Card && [...step3Card.querySelectorAll('button.primary')].filter(b => b.style.display !== 'none').length === 1);
+  // Empty states: cleared queue + review; no-match filters for clients + notes
+  w.getPendingNotes().slice().forEach(p => w.removePendingNote(p.id));
+  w.getReviewDrafts().slice().forEach(d => w.discardReviewDraft(d.id));
+  await flush(); w.renderHome(); await tick();
+  check('V1.16 empty queue shows a friendly line + Record action', $('queueList').textContent.includes('Nothing waiting') && !!$('queueList').querySelector('button'));
+  check('V1.16 empty review list shows a friendly line + action', $('reviewList').textContent.includes('No drafts waiting') && !!$('reviewList').querySelector('button'));
+  w.showView('clients'); $('clientFilter').value = 'zzz-no-match'; w.renderClients(); await tick();
+  check('V1.16 clients empty state offers Add client', $('clientsTable').textContent.includes('No clients yet') && !!$('clientsTable').querySelector('button'));
+  $('clientFilter').value = ''; w.renderClients();
+  w.showView('notes'); $('notesSearch').value = 'zzz-no-match'; w.renderNotes(); await tick();
+  check('V1.16 notes empty state offers New note', $('notesList').textContent.includes('No saved notes yet') && !!$('notesList').querySelector('button'));
+  $('notesSearch').value = ''; w.renderNotes();
+  // Settings regrouping
+  w.showView('models'); await tick(80);
+  const heads = [...$('models').querySelectorAll('h3')].map(h => h.textContent.trim());
+  const wantHeads = ['Downloads', 'Your voice', 'How your notes are written', 'Privacy & security', 'Backup & data', 'Advanced'];
+  const hIdx = wantHeads.map(x => heads.indexOf(x));
+  check('V1.16 settings shows the six plain section headings in order', hIdx.every(i => i >= 0) && hIdx.every((v, i) => i === 0 || v > hIdx[i - 1]));
+  check('V1.16 Advanced starts closed with its controls inside', $('advancedBody').style.display === 'none' && !!$('path-whisper') && !!$('path-llama') && !!$('path-diarize') && !!$('aiImportPath') && !$('modelsBody').contains($('path-whisper')));
+  w.toggleAdvanced(); await tick();
+  check('V1.16 Advanced opens on toggle', $('advancedBody').style.display !== 'none' && $('advancedBtn').getAttribute('aria-expanded') === 'true');
+  w.toggleAdvanced(); await tick();
+  check('V1.16 Advanced closes again', $('advancedBody').style.display === 'none');
+  // Notes editor: More actions disclosure + single primary + secondary Finalize
+  w.openNote(savedState().sessions[0].id); await tick();
+  check('V1.16 editor More actions starts closed with Verify/Copy/Print/Delete inside', $('editorActions').style.display === 'none' && $('editorActions').contains($('verifyBtn')) && !!$('editorActions').querySelector('[onclick="copyNoteBody()"]') && !!$('editorActions').querySelector('[onclick="printCurrentNote()"]') && $('editorActions').contains($('nDeleteBtn')));
+  w.toggleEditorActions(); await tick();
+  check('V1.16 editor More actions opens on toggle', $('editorActions').style.display !== 'none');
+  w.toggleEditorActions(); await tick();
+  const visPrim = [...$('noteEditorWrap').querySelectorAll('button.primary')].filter(b => b.style.display !== 'none');
+  check('V1.16 note editor keeps exactly one visible primary (Save)', visPrim.length === 1 && visPrim[0].getAttribute('data-i') === 'saveNote');
+  check('V1.16 Finalize is a secondary button now', $('finalizeBtn').classList.contains('secondary') && !$('finalizeBtn').classList.contains('primary'));
+  w.closeNoteEditor();
+  // ZH nav labels, then restore English
+  w.toggleUiLang(); await tick(60); await flush();
+  const navZh = [...w.document.querySelectorAll('nav button[data-view]')].map(b => b.textContent.replace(/\s+/g, ' ').trim());
+  check('V1.16 nav shows the five plain labels (ZH)', navZh[0].startsWith('首页') && navZh[1] === '来访者' && navZh[2] === '写记录' && navZh[3] === '记录' && navZh[4] === '设置');
+  w.toggleUiLang(); await tick(60); await flush();
+  check('V1.16 language restored to English after the nav check', w.eval('uiLang') === 'en');
+
 
   // Delete flows
   const noteId = savedState().sessions[0].id;
