@@ -1,13 +1,13 @@
-# Murmur for Android
+# Auris for Android
 
-Murmur V1.4.0 adds Android support. The Android app is the same product —
+Auris V1.4.0 adds Android support. The Android app is the same product —
 same encrypted database format, accounts, audit log, bilingual UI, and
 fully offline AI — with platform differences concentrated in one place:
 how the AI engines are provided.
 
 ## Why Android is different: engines are bundled, not downloaded
 
-On Windows/macOS, Murmur downloads `whisper-cli` / `llama-cli` executables
+On Windows/macOS, Auris downloads `whisper-cli` / `llama-cli` executables
 on first use and runs them from a data folder. Android forbids executing
 downloaded binaries, so on Android the engines ship **inside the APK**:
 
@@ -68,6 +68,6 @@ except where the script itself patches it.
 
 - A signed APK can be installed directly (sideload) or uploaded to
   Google Play as an AAB (`cargo tauri android build --aab`).
-- The database is compatible with desktop Murmur (same SQLCipher
+- The database is compatible with desktop Auris (same SQLCipher
   format); moving a backup file between phone and computer works,
   provided the app versions are the same.

@@ -1,4 +1,4 @@
-/* Frontend smoke test for Murmur (Tauri Web UI).
+/* Frontend smoke test for Auris (Tauri Web UI).
  * Runs web/index.html in jsdom with an in-memory fake of the Tauri bridge
  * (db_get_state / db_set_state behave like the SQLCipher workspace snapshot).
  * Uses ONLY fictional test data. Run: NODE_PATH=/tmp/oan-smoke/node_modules node scripts/smoke-test.cjs
@@ -447,7 +447,23 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('rust: deprecated whisper main binary is not a candidate', !rustSrc.includes('"main.exe"') && !rustSrc.includes('"main"'));
   check('rust: whisper-cli.exe is the Windows whisper candidate', rustSrc.includes('&["whisper-cli.exe"]'));
   check('rust: engine search honors strict candidate priority', rustSrc.includes('for name in names'));
-  check('version V1.16.0 in UI', html.includes('Desktop V1.16.0'));
+  check('version V1.17.0 in UI', html.includes('Desktop V1.17.0'));
+
+  // ================= V1.17.0: renamed Murmur -> Auris (display name only) =================
+  const confJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src-tauri', 'tauri.conf.json'), 'utf8'));
+  const cargoToml = fs.readFileSync(path.join(__dirname, '..', 'src-tauri', 'Cargo.toml'), 'utf8');
+  const cargoLock = fs.readFileSync(path.join(__dirname, '..', 'src-tauri', 'Cargo.lock'), 'utf8');
+  const changelogMd = fs.readFileSync(path.join(__dirname, '..', 'CHANGELOG.md'), 'utf8');
+  check('V1.17 product name + window title are Auris', confJson.productName === 'Auris' && confJson.app.windows[0].title === 'Auris');
+  check('V1.17 bundle identifier unchanged (data continuity)', confJson.identifier === 'us.mindx.murmur');
+  check('V1.17 config version is 1.17.0', confJson.version === '1.17.0');
+  check('V1.17 cargo package + lib names unchanged', /^name = "murmur"$/m.test(cargoToml) && cargoToml.includes('name = "murmur_lib"') && cargoLock.includes('name = "murmur"'));
+  check('V1.17 db filename + portable env + verifier domain unchanged', rustSrc.includes('murmur.db') && rustSrc.includes('MURMUR_PORTABLE') && rustSrc.includes('murmur-access-v1'));
+  check('V1.17 no user-visible Murmur left in the UI file', !html.includes('Murmur'));
+  check('V1.17 internal __murmurOs hook kept', html.includes('__murmurOs'));
+  check('V1.17 rendered brand is Auris', w.document.title === 'Auris' && w.document.querySelector('header h1').textContent === 'Auris');
+  check('V1.17 nav version shows Auris + Desktop V1.17.0', w.document.querySelector('.nav-version').textContent.includes('Auris') && w.document.querySelector('.nav-version').textContent.includes('Desktop V1.17.0'));
+  check('V1.17 changelog carries the rename entry', changelogMd.includes('now called Auris'));
 
   // V1.8.0: client default format preselects in the Studio
   w.openClient(clientId);

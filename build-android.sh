@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Murmur — one-click Android build (macOS / Linux development machine).
+# Auris — one-click Android build (macOS / Linux development machine).
 #
 # Produces a release APK under src-tauri/gen/android/app/build/outputs/.
 # First run installs nothing automatically; it checks for the toolchain and
@@ -66,8 +66,8 @@ if [ -n "${MURMUR_ANDROID_KEYSTORE:-}" ]; then
   APKSIGNER_PASS="pass:${MURMUR_ANDROID_STORE_PASS:-}" "$BT/apksigner" sign \
     --ks "$MURMUR_ANDROID_KEYSTORE" --ks-key-alias "${MURMUR_ANDROID_KEY_ALIAS:-murmur}" \
     --ks-pass "pass:${MURMUR_ANDROID_STORE_PASS:-}" --key-pass "pass:${MURMUR_ANDROID_KEY_PASS:-}" \
-    --out "Murmur-Android.apk" "${APK%.apk}-aligned.apk"
-  echo ">> Signed APK: Murmur-Android.apk"
+    --out "Auris-Android.apk" "${APK%.apk}-aligned.apk"
+  echo ">> Signed APK: Auris-Android.apk"
 else
   echo ">> Unsigned release APK: $APK"
   echo "   (Android requires a signature before install — set MURMUR_ANDROID_KEYSTORE to sign automatically.)"

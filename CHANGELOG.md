@@ -1,4 +1,8 @@
-# Changelog — Murmur
+# Changelog — Auris
+
+## V1.17.0 — 2026-11-12 (a new name: Auris)
+
+- **Murmur is now called Auris.** Nothing else changes: it is the same app, and your database, accounts, settings, downloaded models, and backups all carry over exactly as they were — only the name on the door is new. Existing installs upgrade in place; the internal identifiers are deliberately unchanged, so your data is right where you left it. Build outputs follow the new name (Auris-…-Windows-Setup.exe, Auris-…-Windows-Portable.zip, Auris-…-macOS.dmg).
 
 ## V1.16.0 — 2026-11-09 (a simpler, friendlier interface)
 

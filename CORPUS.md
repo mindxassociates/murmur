@@ -1,6 +1,6 @@
 # Clinical Language Corpus
 
-Murmur ships a built-in clinical language corpus (introduced in V1.5.0;
+Auris ships a built-in clinical language corpus (introduced in V1.5.0;
 problem-focused layer and My Phrases added in V1.6.0): a compact set of
 standard progress-note phrasing patterns ("frames") that is added to every
 note-generation prompt, in both recording/transcript mode and

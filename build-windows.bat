@@ -2,7 +2,7 @@
 setlocal EnableDelayedExpansion
 chcp 65001 >nul
 echo ============================================================
-echo  Murmur - One-Click Windows Build
+echo  Auris - One-Click Windows Build
 echo  (first run auto-installs missing tools; may take a while)
 echo ============================================================
 cd /d "%~dp0"
@@ -75,28 +75,28 @@ call npm run build -- --bundles nsis || goto :fail
 echo [4/5] Collecting release files into .\release\ ...
 if not exist release mkdir release
 for %%f in ("src-tauri\target\release\bundle\nsis\*.exe") do (
-  copy /y "%%f" "release\Murmur-%VER%-Windows-Setup.exe" >nul
+  copy /y "%%f" "release\Auris-%VER%-Windows-Setup.exe" >nul
 )
-if not exist "release\Murmur-%VER%-Windows-Setup.exe" ( echo [FAIL] Installer not found in bundle output. & goto :fail )
+if not exist "release\Auris-%VER%-Windows-Setup.exe" ( echo [FAIL] Installer not found in bundle output. & goto :fail )
 cd release
-certutil -hashfile "Murmur-%VER%-Windows-Setup.exe" SHA256 | findstr /v "hash CertUtil" > "Murmur-%VER%-Windows-Setup.exe.sha256.txt"
+certutil -hashfile "Auris-%VER%-Windows-Setup.exe" SHA256 | findstr /v "hash CertUtil" > "Auris-%VER%-Windows-Setup.exe.sha256.txt"
 cd ..
 
 echo [5/5] Building portable (no-install) package...
-set "PDIR=release\Murmur-%VER%-Windows-Portable"
+set "PDIR=release\Auris-%VER%-Windows-Portable"
 if exist "%PDIR%" rmdir /s /q "%PDIR%"
 mkdir "%PDIR%"
 if not exist "src-tauri\target\release\murmur.exe" ( echo [FAIL] Portable binary not found. & goto :fail )
-copy /y "src-tauri\target\release\murmur.exe" "%PDIR%\Murmur.exe" >nul
+copy /y "src-tauri\target\release\murmur.exe" "%PDIR%\Auris.exe" >nul
 type nul > "%PDIR%\portable.mode"
 copy /y "便携版说明.md" "%PDIR%\便携版说明.md" >nul
-powershell -NoProfile -Command "Compress-Archive -Path '%PDIR%\*' -DestinationPath 'release\Murmur-%VER%-Windows-Portable.zip' -Force" || ( echo [FAIL] Portable zip failed. & goto :fail )
-certutil -hashfile "release\Murmur-%VER%-Windows-Portable.zip" SHA256 | findstr /v "hash CertUtil" > "release\Murmur-%VER%-Windows-Portable.zip.sha256.txt"
+powershell -NoProfile -Command "Compress-Archive -Path '%PDIR%\*' -DestinationPath 'release\Auris-%VER%-Windows-Portable.zip' -Force" || ( echo [FAIL] Portable zip failed. & goto :fail )
+certutil -hashfile "release\Auris-%VER%-Windows-Portable.zip" SHA256 | findstr /v "hash CertUtil" > "release\Auris-%VER%-Windows-Portable.zip.sha256.txt"
 echo.
 echo ============================================================
 echo  BUILD SUCCESSFUL
-echo  Installer: release\Murmur-%VER%-Windows-Setup.exe
-echo  Portable : release\Murmur-%VER%-Windows-Portable.zip (unzip anywhere, no install)
+echo  Installer: release\Auris-%VER%-Windows-Setup.exe
+echo  Portable : release\Auris-%VER%-Windows-Portable.zip (unzip anywhere, no install)
 echo  Send that single .exe to the counselor. Data is NOT inside
 echo  the installer; it stays in the app data folder on their PC.
 echo ============================================================

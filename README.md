@@ -1,10 +1,10 @@
-# Murmur
+# Auris
 
 *Progress notes that never leave the room.*
 
 **Version 1.11.0** · Desktop app for Windows & macOS · Tauri 2 + SQLCipher + local AI engines
 
-Murmur turns therapy sessions into progress notes without anything leaving the computer it runs on. Record a session (with the client's consent) or type a brief summary, transcribe and draft locally, review and edit, then save — the only network use in the whole product is the one-time download of the speech and language models you choose.
+Auris turns therapy sessions into progress notes without anything leaving the computer it runs on. Record a session (with the client's consent) or type a brief summary, transcribe and draft locally, review and edit, then save — the only network use in the whole product is the one-time download of the speech and language models you choose.
 
 ## Why offline
 
@@ -31,7 +31,7 @@ Murmur turns therapy sessions into progress notes without anything leaving the c
 
 ### AI Studio
 - **Ambient recording** in the app (consent checkbox required before the microphone opens), or **import an audio file**.
-- **Recording sources for in-person and telehealth**: *In-person · microphone* (pick any audio input device, including loopback devices such as Stereo Mix / VB-CABLE / BlackHole that carry call audio), or *Telehealth · microphone + system audio* — share the entire screen with system audio on and Murmur mixes your mic with the computer audio (the shared video is discarded immediately). Where direct system-audio capture is unavailable (notably macOS), the loopback-device route covers telehealth.
+- **Recording sources for in-person and telehealth**: *In-person · microphone* (pick any audio input device, including loopback devices such as Stereo Mix / VB-CABLE / BlackHole that carry call audio), or *Telehealth · microphone + system audio* — share the entire screen with system audio on and Auris mixes your mic with the computer audio (the shared video is discarded immediately). Where direct system-audio capture is unavailable (notably macOS), the loopback-device route covers telehealth.
 - **Local transcription** with Whisper (whisper.cpp). Models: Base, Small, Medium, Large v3 Turbo — pick speed vs. accuracy.
 - **Transcription language**: Auto-detect plus 34 languages, including English, 中文 (Mandarin), 粤语 (Cantonese), Español, 日本語， 한국어, Français, Deutsch, Português, Русский, العربية, हिन्दी, Tiếng Việt, ไทย, and more.
 - **Transcription vocabulary**: give Whisper a list of terms to expect — medication names, proper names, technical vocabulary — and it recognizes them far more reliably. The selected client's name is added automatically; the combined list is passed to the engine as its initial prompt on every transcription.
@@ -72,7 +72,7 @@ The interface is English-first, with a **中文** toggle in the header for the m
 
 ## Security & HIPAA safeguards (V1.1.0)
 
-Murmur is used with PHI in the US as well as internationally, and is built around the HIPAA Security Rule's technical safeguards (45 CFR 164.312) — see `HIPAA.md` for the full safeguards map and deployment guide. In brief:
+Auris is used with PHI in the US as well as internationally, and is built around the HIPAA Security Rule's technical safeguards (45 CFR 164.312) — see `HIPAA.md` for the full safeguards map and deployment guide. In brief:
 
 - **Encryption at rest**: SQLCipher (AES-256) database; the key is random per install and wrapped per user with AES-256-GCM. Backups are encrypted copies and are integrity-checked.
 - **Personal accounts**: unique username + password per user (minimum 10 characters, scrypt verifier), Admin / Clinician roles, sign-in throttling (5 failures → 5-minute lockout), and failed attempts recorded in the audit log.
@@ -102,11 +102,11 @@ Generated notes are phrased toward standard progress-note register (third person
 
 ## Android
 
-Murmur also runs on Android (arm64). The Android build bundles the AI engines inside the APK — Android forbids running downloaded executables — so engines are built in rather than downloaded; models still download normally. Telehealth system-audio capture is desktop-only; on Android, use the microphone source. Build with `build-android.sh`; full details in `ANDROID.md`.
+Auris also runs on Android (arm64). The Android build bundles the AI engines inside the APK — Android forbids running downloaded executables — so engines are built in rather than downloaded; models still download normally. Telehealth system-audio capture is desktop-only; on Android, use the microphone source. Build with `build-android.sh`; full details in `ANDROID.md`.
 
 ## Developer
 
-Murmur is developed by [Mind X Associates](https://mind.us) ([Mind X社区 — 中文](https://mind.us/zh)). The app itself carries the same credit in the sidebar; the link opens the developer site in your browser (the only external link the app allows).
+Auris is developed by [Mind X Associates](https://mind.us) ([Mind X社区 — 中文](https://mind.us/zh)). The app itself carries the same credit in the sidebar; the link opens the developer site in your browser (the only external link the app allows).
 
 ## Version history
-See `CHANGELOG.md`. Current: **V1.16.0**.
+See `CHANGELOG.md`. Current: **V1.17.0**.

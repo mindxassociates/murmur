@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fetches / builds the ARM64 Android engine executables for Murmur and stages
+# Fetches / builds the ARM64 Android engine executables for Auris and stages
 # them as jniLibs libraries (libwhisper-cli.so / libllama-cli.so) — the only
 # form Android will extract to the app's native library directory and allow
 # the app to execute.

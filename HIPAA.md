@@ -1,6 +1,6 @@
-# Murmur and HIPAA — Safeguards Map & Deployment Guide
+# Auris and HIPAA — Safeguards Map & Deployment Guide
 
-Murmur stores protected health information (PHI) for US practices, so it is built
+Auris stores protected health information (PHI) for US practices, so it is built
 around the HIPAA Security Rule's safeguards (45 CFR Part 164, Subpart C). This
 document maps each relevant safeguard to what the software does, and — just as
 important — what remains the covered entity's own responsibility. Software alone
@@ -10,7 +10,7 @@ management. Nothing here is legal advice.
 
 ## Why the architecture helps
 
-Murmur runs entirely on the clinician's own computer. There is no Murmur cloud,
+Auris runs entirely on the clinician's own computer. There is no Auris cloud,
 no vendor server, no account with the developer, and no telemetry. Session
 audio, transcripts, and notes never leave the device, so the developer is never
 in possession of PHI and **no Business Associate Agreement with the developer is
@@ -82,7 +82,7 @@ data is ever sent anywhere.
 ## Exports are the weak point — handle with care
 
 Copying a note, exporting a `.txt`, or printing creates **unencrypted** PHI
-outside the app's protection. Murmur warns before copy/export and records each
+outside the app's protection. Auris warns before copy/export and records each
 of these actions in the audit log. Your policies should cover where exported
 files may be stored (encrypted drives only), and printed notes should be filed
 or securely destroyed.
@@ -92,17 +92,17 @@ or securely destroyed.
 The Security Rule also requires things no app can do for you, including:
 
 - **Risk analysis** (164.308(a)(1)) — document that you assessed risks to ePHI,
-  including the device Murmur runs on.
+  including the device Auris runs on.
 - **Workstation security** (164.310(b–c)) — use a computer with full-disk
   encryption (BitLocker / FileVault), an OS screen lock, current OS updates,
-  and restricted physical access. Murmur's encryption protects its database;
+  and restricted physical access. Auris's encryption protects its database;
   full-disk encryption protects everything else, including exported files and
   temporary audio.
 - **Workforce training & policies** (164.308(a)(5), 164.312(a)(2)(iii)
   procedures) — who may use the app, password rules, what to do with exports
   and printouts, and how recordings consent is obtained (the app ships a
   printable bilingual consent form for this).
-- **Contingency plan** (164.308(a)(6–7)) — Murmur's automatic encrypted backups
+- **Contingency plan** (164.308(a)(6–7)) — Auris's automatic encrypted backups
   support this; decide where backup copies live and test a restore. Remember:
   a backup restored on another machine still needs a user's password.
 - **Breach procedures** — if a device is lost or stolen, the encrypted database
@@ -111,7 +111,7 @@ The Security Rule also requires things no app can do for you, including:
 
 ## A note on "HIPAA compliant" claims
 
-No software product is certified by HHS, and Murmur does not claim certification.
-The accurate statement is: *Murmur implements technical safeguards designed to
+No software product is certified by HHS, and Auris does not claim certification.
+The accurate statement is: *Auris implements technical safeguards designed to
 support a covered entity's HIPAA compliance program, in a fully offline
 architecture where the vendor never accesses PHI.*

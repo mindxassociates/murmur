@@ -1,7 +1,7 @@
 [package]
 name = "murmur"
-version = "1.16.0"
-description = "Murmur"
+version = "1.17.0"
+description = "Auris"
 authors = ["Mind X Associates"]
 edition = "2021"
 

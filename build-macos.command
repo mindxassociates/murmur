@@ -1,9 +1,9 @@
 #!/bin/bash
-# Murmur — macOS 一键构建（首次运行会自动安装缺失工具，可能需要较长时间）
+# Auris — macOS 一键构建（首次运行会自动安装缺失工具，可能需要较长时间）
 set -e
 cd "$(dirname "$0")"
 echo "============================================================"
-echo " Murmur — macOS 一键构建"
+echo " Auris — macOS 一键构建"
 echo "============================================================"
 
 # ---------- Xcode 命令行工具 ----------
@@ -46,19 +46,19 @@ echo "[4/4] 收集成品到 ./release/ …"
 mkdir -p release
 DMG=$(ls src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null | head -1)
 APP=$(ls -d src-tauri/target/release/bundle/macos/*.app 2>/dev/null | head -1)
-[ -n "$DMG" ] && cp "$DMG" "release/Murmur-$VER-macOS.dmg"
-if [ -n "$APP" ]; then ditto -c -k --sequesterRsrc --keepParent "$APP" "release/Murmur-$VER-macOS-app.zip"; fi
+[ -n "$DMG" ] && cp "$DMG" "release/Auris-$VER-macOS.dmg"
+if [ -n "$APP" ]; then ditto -c -k --sequesterRsrc --keepParent "$APP" "release/Auris-$VER-macOS-app.zip"; fi
 if [ -n "$APP" ]; then
   echo "[+] 制作便携版（免安装，数据保存在 .app 同文件夹）…"
-  PSTAGE="release/Murmur-$VER-macOS-Portable"
+  PSTAGE="release/Auris-$VER-macOS-Portable"
   rm -rf "$PSTAGE"; mkdir -p "$PSTAGE"
   cp -R "$APP" "$PSTAGE/"
   touch "$PSTAGE/portable.mode"
   cp "便携版说明.md" "$PSTAGE/便携版说明.md"
-  ditto -c -k --sequesterRsrc --keepParent "$PSTAGE" "release/Murmur-$VER-macOS-Portable.zip"
+  ditto -c -k --sequesterRsrc --keepParent "$PSTAGE" "release/Auris-$VER-macOS-Portable.zip"
   rm -rf "$PSTAGE"
 fi
-(cd release && shasum -a 256 Murmur-* > SHA256SUMS.txt)
+(cd release && shasum -a 256 Auris-* > SHA256SUMS.txt)
 echo ""
 echo "============================================================"
 echo " 构建成功"
