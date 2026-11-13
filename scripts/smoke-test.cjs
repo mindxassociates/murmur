@@ -19,7 +19,13 @@ let audioSeq = 0; const snapshotLog = []; let previewOut = 'Preview line one fro
 const prefs = new Map();
 const auditEvents = [];
 let user = null;
+let startGate = null; // V1.19: {cmds:Set, promise} holds selected engine-start invokes unresolved
+let procErrorOnce = null; // V1.19: the next completed proc poll reports this error string instead
 const fakeInvoke = async (cmd, args = {}) => {
+  if (startGate && startGate.cmds.has(cmd)) await startGate.promise;
+  return fakeInvokeImpl(cmd, args);
+};
+const fakeInvokeImpl = async (cmd, args = {}) => {
   switch (cmd) {
     case 'startup_status': return { needsSetup: workspaceJson === null, authenticated: false, user: null };
     case 'startup_setup': user = { id: 'u1', username: args.input.username, displayName: args.input.displayName || args.input.username, role: 'Admin' }; workspaceJson = '{}'; return { ok: true, user };
@@ -65,6 +71,7 @@ const fakeInvoke = async (cmd, args = {}) => {
     case 'diarize_start': lastDiarizeArgs = args; aiProc = { kind: 'diarize', n: 0, combined: !!args.enrollPath }; return { input: args.enrollPath ? '/fake/ai-audio/diarize-combined.wav' : args.audioPath, combined: !!args.enrollPath };
     case 'generate_start': lastPrompt = args.prompt; aiProc = { kind: 'generate', n: 0, gen: genBehavior, out: args.prompt.includes('VERIFY NOTE AGAINST SOURCE') ? verifyOutput : undefined }; return true;
     case 'ai_proc_poll': { if (!aiProc) return { active: false, kind: '', done: true, output: '', progress: -1 };
+      if (procErrorOnce && aiProc.n >= 1) { const e = procErrorOnce, k = aiProc.kind; procErrorOnce = null; aiProc = null; return { active: false, kind: k, done: true, progress: -1, output: '', error: e }; }
       aiProc.n++; if (aiProc.gen) { const r = aiProc.gen(aiProc.n); if (r) { if (r.done) aiProc = null; return r; } }
       if (aiProc.n < 2) return { active: true, kind: aiProc.kind, done: false, progress: 50, output: '' };
       const kind = aiProc.kind; const customOut = aiProc.out; const aiProcCombined = !!aiProc.combined; aiProc = null;
@@ -185,7 +192,13 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   await w.aiPollOnce(); await w.aiPollOnce();
   check('transcript filled from engine output', $('aiTranscript').value.includes('sleeping well'));
   check('transcribe invocation received vocabulary prompt (client name + term)', !!lastTranscribeArgs && typeof lastTranscribeArgs.prompt === 'string' && lastTranscribeArgs.prompt.includes('Test Client A') && lastTranscribeArgs.prompt.includes('sertraline'));
+  // V1.19: auto speaker separation defaults ON and the fake reports the speaker
+  // engine + models ready, so this transcription flows into the diarization
+  // pass; the deferred audio discard lands when that pass ends.
+  for (let i = 0; i < 10 && !w.eval('diarizeData'); i++) { await w.aiPollOnce(); await tick(40); }
+  check('V1.19 auto speaker pass ran after transcription (default on)', !!w.eval('diarizeData'));
   check('recording discarded after transcription (default on)', aiDiscarded === '/fake/ai-audio/a1.wav');
+  w.toggleDiarizeOriginal(); // the legacy segment checks below run on the plain transcript, as before
 
   // Speaker-segment aids
   w.insertSpeakerMarker('Therapist');
@@ -447,7 +460,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('rust: deprecated whisper main binary is not a candidate', !rustSrc.includes('"main.exe"') && !rustSrc.includes('"main"'));
   check('rust: whisper-cli.exe is the Windows whisper candidate', rustSrc.includes('&["whisper-cli.exe"]'));
   check('rust: engine search honors strict candidate priority', rustSrc.includes('for name in names'));
-  check('version V1.18.0 in UI', html.includes('Desktop V1.18.0'));
+  check('version V1.19.0 in UI', html.includes('Desktop V1.19.0'));
 
   // ================= V1.17.0: renamed Murmur -> Auris (display name only) =================
   const confJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src-tauri', 'tauri.conf.json'), 'utf8'));
@@ -456,13 +469,13 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   const changelogMd = fs.readFileSync(path.join(__dirname, '..', 'CHANGELOG.md'), 'utf8');
   check('V1.17 product name + window title are Auris', confJson.productName === 'Auris' && confJson.app.windows[0].title === 'Auris');
   check('V1.17 bundle identifier unchanged (data continuity)', confJson.identifier === 'us.mindx.murmur');
-  check('V1.18 config version is 1.18.0', confJson.version === '1.18.0');
+  check('V1.19 config version is 1.19.0', confJson.version === '1.19.0');
   check('V1.17 cargo package + lib names unchanged', /^name = "murmur"$/m.test(cargoToml) && cargoToml.includes('name = "murmur_lib"') && cargoLock.includes('name = "murmur"'));
   check('V1.17 db filename + portable env + verifier domain unchanged', rustSrc.includes('murmur.db') && rustSrc.includes('MURMUR_PORTABLE') && rustSrc.includes('murmur-access-v1'));
   check('V1.17 no user-visible Murmur left in the UI file', !html.includes('Murmur'));
   check('V1.17 internal __murmurOs hook kept', html.includes('__murmurOs'));
   check('V1.17 rendered brand is Auris', w.document.title === 'Auris' && w.document.querySelector('header h1').textContent === 'Auris');
-  check('V1.17 nav version shows Auris + Desktop V1.18.0', w.document.querySelector('.nav-version').textContent.includes('Auris') && w.document.querySelector('.nav-version').textContent.includes('Desktop V1.18.0'));
+  check('V1.17 nav version shows Auris + Desktop V1.19.0', w.document.querySelector('.nav-version').textContent.includes('Auris') && w.document.querySelector('.nav-version').textContent.includes('Desktop V1.19.0'));
   check('V1.17 changelog carries the rename entry', changelogMd.includes('now called Auris'));
 
   // V1.8.0: client default format preselects in the Studio
@@ -1210,6 +1223,161 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('V1.18 last-time card renders in Chinese', $('lastTimeWrap').textContent.includes('上次回顾') && $('lastTimeWrap').textContent.includes('LT PLAN marker'));
   check('V1.18 draft-trust line renders in Chinese', $('draftTrustLine').textContent.includes('草稿只是起点'));
   w.toggleUiLang(); await tick(60); await flush();
+
+  // ================= V1.19.0 =================
+  // WS4: MSE selected state is unmistakable (CSS anchors, following the suite's
+  // existing html.includes pattern). The segmented controls were audited too:
+  // their selected segment is a white raised chip on the tinted track (not the
+  // accent), already distinct — asserted unchanged here.
+  check('V1.19 WS4 mse-chip.on uses the deep background + bold white text', html.includes('.mse-chip.on{background:var(--accent-deep);color:#fff;border-color:var(--accent-deep);font-weight:600}'));
+  check('V1.19 WS4 mse-chip.on carries a checkmark prefix', html.includes(".mse-chip.on::before{content:'\\2713 '}"));
+  check('V1.19 WS4 panel-scoped .on override beats the panel button rule', html.includes('#msePanel button.mse-chip.on,#panelMsePanel button.mse-chip.on{background:var(--accent-deep)'));
+  check('V1.19 WS4 segmented selected style audited + unchanged (white chip)', html.includes('.seg button.on{background:#fff;color:var(--ink);font-weight:600'));
+  check('V1.19 WS1 busy spinner + press-effect CSS present', html.includes('.btn-busy::after') && html.includes('button:active:not(:disabled)'));
+  // WS2: the note engine runs out of conversation mode, with room to finish.
+  const genFnBody = (rustSrc.match(/fn generate_start[\s\S]*?\n\}/) || [''])[0];
+  check('V1.19 WS2 generate_start passes --no-cnv (conversation mode off)', genFnBody.includes('"--no-cnv"'));
+  check('V1.19 WS2 generate_start token budget is 2048, not 1024', genFnBody.includes('"2048"') && !genFnBody.includes('"1024"'));
+
+  const setGate = cmds => { let rel; const promise = new Promise(r => { rel = r; }); startGate = { cmds: new Set(cmds), promise }; return rel; };
+  const drainDiarize = async () => { for (let i = 0; i < 12 && !w.eval('diarizeData'); i++) { await w.aiPollOnce(); await tick(40); } };
+
+  // WS3 setup: no enrollment, no saved cluster, auto pref untouched (default).
+  await w.deleteEnrollment(); await tick();
+  await w.desktopDB.removePref('aiVoiceCluster');
+  await w.desktopDB.removePref('aiAutoDiarize');
+  check('V1.19 WS3 auto speaker separation defaults ON (pref unset)', w.eval('getDiarizeAutoPref()') === true);
+  w.eval('if(diarizeFlowBusy)diarizeCleanupAfterRun(true)'); // release any separation pass left over from earlier sections
+  w.showView('studio'); await tick(30);
+  $('aiClient').value = clientId; $('aiDelAudio').checked = true;
+  w.eval("aiAudioPath='/fake/ai-audio/a1.wav'");
+  lastDiarizeArgs = null; alertLog.length = 0;
+
+  // WS1 + WS3: Transcribe is busy in the same tick; speakers then just happen.
+  const relT = setGate(['transcribe_start']);
+  const tp = w.startTranscribe(); await tick(10);
+  check('V1.19 WS1 Transcribe button busy in the same tick', $('aiTranscribeBtn').disabled === true && $('aiTranscribeBtn').classList.contains('btn-busy'));
+  check('V1.19 WS1 proc wrap visible before the engine start resolves', $('aiProcWrap').style.display === 'block');
+  relT(); startGate = null; await tp;
+  await w.aiPollOnce(); await w.aiPollOnce();
+  check('V1.19 WS1 Transcribe button restored when transcription lands', $('aiTranscribeBtn').disabled === false && !$('aiTranscribeBtn').classList.contains('btn-busy'));
+  await drainDiarize();
+  check('V1.19 WS3 diarize_start invoked automatically after transcription', !!lastDiarizeArgs);
+  check('V1.19 WS3 labeled transcript replaced the working text', $('aiTranscript').value.includes('Speaker 1:') && $('aiTranscript').value.includes('sleeping well'));
+  check('V1.19 WS3 found-speakers status line shown', $('speakerStatus').style.display !== 'none' && $('speakerStatus').textContent.includes('Found 2 speakers') && $('speakerStatus').textContent.includes('This is me'));
+
+  // WS3: an explicit opt-out is honored.
+  await w.desktopDB.setPref('aiAutoDiarize', '0');
+  check('V1.19 WS3 explicit off reads back off', w.eval('getDiarizeAutoPref()') === false);
+  lastDiarizeArgs = null; w.eval('diarizeData=null');
+  w.eval("aiAudioPath='/fake/ai-audio/a1.wav'");
+  await w.startTranscribe(); await w.aiPollOnce(); await w.aiPollOnce(); await tick(60);
+  check('V1.19 WS3 no diarization when the user turned it off', lastDiarizeArgs === null && $('aiTranscript').value.includes('sleeping well') && !$('aiTranscript').value.includes('Speaker 1:'));
+  await w.desktopDB.removePref('aiAutoDiarize');
+
+  // WS3: setup incomplete -> quiet notice + Settings jump; transcript intact.
+  w.eval("aiStatusCache=Object.assign({}, aiStatusCache, {models: aiStatusCache.models.filter(m=>m.kind!=='diarize')})");
+  w.eval('diarizeData=null'); w.eval("aiAudioPath='/fake/ai-audio/a1.wav'");
+  lastDiarizeArgs = null;
+  await w.startTranscribe(); await w.aiPollOnce(); await w.aiPollOnce(); await tick(60);
+  check('V1.19 WS3 setup-incomplete notice + Settings button shown', $('speakerSetupNotice').style.display !== 'none' && !!$('speakerSetupNotice').querySelector('button'));
+  check('V1.19 WS3 transcript intact + unlabeled when setup incomplete', $('aiTranscript').value.includes('sleeping well') && !$('aiTranscript').value.includes('Speaker 1:') && lastDiarizeArgs === null);
+  w.eval('aiStatusCache=null'); await w.refreshAiStatus();
+
+  // WS3: starting other engine work supersedes a still-running separation
+  // pass instead of orphaning it (the flow releases, its cleanup still runs).
+  w.eval('diarizeData=null'); w.eval("aiAudioPath='/fake/ai-audio/a1.wav'");
+  await w.startTranscribe(); await w.aiPollOnce(); await w.aiPollOnce();
+  check('V1.19 WS3 separation pass is running after transcription', w.eval('diarizeFlowBusy') === true);
+  const qAuto = w.getPendingNotes().filter(p => p.kind === 'transcript').pop();
+  await w.writeNoteFromQueue(qAuto.id); await tick(40);
+  check('V1.19 WS3 writing a note supersedes the running separation pass', w.eval('diarizeFlowBusy') === false);
+  w.closeNoteEditor();
+  w.eval('getReviewDrafts().slice().forEach(d=>removeReviewDraft(d.id))');
+  w.eval('getPendingNotes().slice().forEach(p=>removePendingNote(p.id))');
+
+  // WS3: with a voice enrollment, speakers come back named.
+  await w.saveEnrollmentWav(new w.Uint8Array([82, 73, 70, 70]), 28); await tick();
+  w.eval('diarizeData=null'); w.eval("aiAudioPath='/fake/ai-audio/a1.wav'");
+  lastDiarizeArgs = null;
+  await w.startTranscribe(); await w.aiPollOnce(); await w.aiPollOnce();
+  await drainDiarize();
+  check('V1.19 WS3 enrollment yields Therapist / Client labels', $('aiTranscript').value.includes('Therapist:') && $('aiTranscript').value.includes('Client:'));
+  check('V1.19 WS3 labeled status line shown', $('speakerStatus').textContent.includes('Speakers labeled: Therapist / Client.'));
+  await w.deleteEnrollment(); await tick();
+
+  // WS1: Write from my summary is busy in the same tick.
+  $('aiBrief').value = 'Client reports sleeping better this week and wants to keep practicing the wind-down routine.';
+  const relG = setGate(['generate_start']);
+  const gp = w.generateNote('brief'); await tick(10);
+  check('V1.19 WS1 Write-from-summary busy in the same tick + proc wrap shown', $('aiGenBriefBtn').disabled === true && $('aiGenBriefBtn').classList.contains('btn-busy') && $('aiProcWrap').style.display === 'block');
+  relG(); startGate = null; await gp; await tick(60);
+  check('V1.19 WS1 generate button restored after the draft lands', $('aiGenBriefBtn').disabled === false && !$('aiGenBriefBtn').classList.contains('btn-busy'));
+  w.closeNoteEditor();
+  w.eval('getReviewDrafts().slice().forEach(d=>removeReviewDraft(d.id))');
+  w.eval('getPendingNotes().slice().forEach(p=>removePendingNote(p.id))');
+
+  // WS1: Separate speakers is busy before its first engine call resolves.
+  w.eval('diarizeData=null'); w.eval("aiAudioPath='/fake/ai-audio/a1.wav'");
+  $('aiTranscript').value = 'Client: I have been sleeping well lately.';
+  const relD = setGate(['transcribe_start']);
+  const dp = w.startDiarizeFlow(); await tick(80);
+  check('V1.19 WS1 Separate speakers busy before the stage-1 start resolves', $('aiDiarizeBtn').disabled === true && $('aiDiarizeBtn').classList.contains('btn-busy') && $('aiProcWrap').style.display === 'block');
+  relD(); startGate = null; await dp;
+  await drainDiarize();
+  check('V1.19 WS1 Separate speakers restored after the pass', $('aiDiarizeBtn').disabled === false && !$('aiDiarizeBtn').classList.contains('btn-busy'));
+
+  // WS1: Verify note is busy in the same tick.
+  await w.generateNote('brief'); await tick(40); // fresh draft in the editor; lastGenSource set
+  const relV = setGate(['generate_start']);
+  const vp = w.verifyNote(); await tick(10);
+  check('V1.19 WS1 Verify button busy in the same tick', $('verifyBtn').disabled === true && $('verifyBtn').classList.contains('btn-busy'));
+  relV(); startGate = null; await vp;
+  await w.verifyPollOnce(); await w.verifyPollOnce(); await tick(40);
+  check('V1.19 WS1 Verify button restored after the check', $('verifyBtn').disabled === false && !$('verifyBtn').classList.contains('btn-busy'));
+  w.closeNoteEditor();
+  w.eval('getReviewDrafts().slice().forEach(d=>removeReviewDraft(d.id))');
+  w.eval('getPendingNotes().slice().forEach(p=>removePendingNote(p.id))');
+
+  // WS1: case-overview Regenerate is busy in the same tick.
+  w.openClientWorkspace(clientId); await tick(30);
+  const relO = setGate(['generate_start']);
+  const op = w.regenCaseOverview(); await tick(10);
+  check('V1.19 WS1 Regenerate busy in the same tick', $('wsOverviewBtn').disabled === true && $('wsOverviewBtn').classList.contains('btn-busy'));
+  relO(); startGate = null; await op; await tick(40);
+  check('V1.19 WS1 Regenerate restored afterwards', $('wsOverviewBtn').disabled === false && !$('wsOverviewBtn').classList.contains('btn-busy'));
+  w.closeClientWorkspace();
+
+  // WS1: a Settings download button disables in the same tick.
+  w.showView('models'); await tick(30);
+  const dlBtn = [...w.document.querySelectorAll('#models button')].find(b => (b.getAttribute('onclick') || '').includes('llm-qwen15'));
+  check('V1.19 WS1 download button present for an undownloaded model', !!dlBtn);
+  if (dlBtn) {
+    const relDl = setGate(['ai_download']);
+    const dlp = w.aiStartDownload('llm-qwen15', dlBtn); await tick(10);
+    check('V1.19 WS1 download button busy in the same tick', dlBtn.disabled === true && dlBtn.classList.contains('btn-busy'));
+    relDl(); startGate = null; await dlp; await tick(30);
+    check('V1.19 WS1 download button restored after start', dlBtn.disabled === false && !dlBtn.classList.contains('btn-busy'));
+  }
+
+  // WS2: a crashed generation -> one short alert; raw log to Technical details.
+  alertLog.length = 0;
+  genBehavior = () => ({ active: false, done: true, progress: 100, output: '', error: 'Engine exited (exit code: 0xc0000409). FAKE_STDERR_TAIL_AAA\nFAKE_STDERR_TAIL_BBB' });
+  const qItem119 = w.addPendingNote(clientId, 'brief', 'WS2 crash source text', '2026-10-30');
+  await w.writeNoteFromQueue(qItem119); await tick(40);
+  check('V1.19 WS2 crash alert is short, carries the code, hides the raw log', alertLog.some(a => a.includes('stopped unexpectedly') && a.includes('0xC0000409') && !a.includes('FAKE_STDERR_TAIL')));
+  check('V1.19 WS2 raw log preserved verbatim in Home technical details', $('homeTechText').textContent.includes('FAKE_STDERR_TAIL_AAA') && $('homeTechText').textContent.includes('FAKE_STDERR_TAIL_BBB') && $('homeTechDetails').style.display !== 'none');
+  check('V1.19 WS2 technical details offer a Copy button', !!$('homeTechDetails').querySelector('button'));
+  genBehavior = () => null;
+  w.eval('getPendingNotes().slice().forEach(p=>removePendingNote(p.id))');
+
+  // WS2: a crashed transcription -> same dignity, Studio details block.
+  alertLog.length = 0;
+  procErrorOnce = 'Engine exited (exit code: 0xc0000005). ANOTHER_TAIL_ZZZ';
+  w.eval("aiAudioPath='/fake/ai-audio/a1.wav'"); w.eval('diarizeData=null');
+  await w.startTranscribe(); await w.aiPollOnce(); await w.aiPollOnce(); await tick(40);
+  check('V1.19 WS2 transcription crash alert is short with code, no raw tail', alertLog.some(a => a.includes('stopped unexpectedly') && a.includes('0xC0000005') && !a.includes('ANOTHER_TAIL_ZZZ')));
+  check('V1.19 WS2 transcription log preserved in Studio technical details', $('procTechText').textContent.includes('ANOTHER_TAIL_ZZZ') && $('procTechDetails').style.display !== 'none');
 
 
   // Delete flows

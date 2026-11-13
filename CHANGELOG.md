@@ -1,5 +1,13 @@
 # Changelog — Auris
 
+## V1.19.0 — 2026-11-13 (buttons that answer, speakers by default)
+
+- **Every engine button now answers in the same tick**: Transcribe, Write my note, Write from my summary, Separate speakers, Verify note, the case-overview Regenerate button, and the Settings download buttons all show a busy spinner and the progress bar the moment you click — no more wondering whether a click landed while an engine starts.
+- **A sturdier note engine, and shorter error messages**: the note engine no longer runs in conversation mode, and its generation budget doubled so longer detailed notes are not cut short. If an engine process ever stops unexpectedly, you get one short message with the error code instead of a wall of log text; the full log is kept under a **Technical details** section (in the Studio and on Home) with a Copy button.
+- **Speakers are labeled automatically**: after a transcription, speaker separation now runs on its own (you can still turn it off under More options). When it finishes, one line under the transcript tells you the result — speakers named Therapist / Client when your voice sample is enrolled, or a pointer to the "This is me" correction when it is not. If the speaker engine or its models are not downloaded yet, a quiet notice offers a jump to Settings → Downloads, and your plain transcript is untouched either way.
+- **Starting other work supersedes a separation pass cleanly**: beginning a transcription, a note, or a verification while separation is still running releases the pass instead of leaving it stuck, and a finished pass only ever deletes the recording it belonged to.
+- **Selected mental-status chips are unmistakable**: deep background, bold white text, and a checkmark — no more white-on-light selections.
+
 ## V1.18.0 — 2026-11-12 (a calmer, better-prepared session screen)
 
 - **A "Last time" card while you prepare**: pick a client in Step 1 and a quiet card shows the date of their most recent finished note, what was planned last time, and their treatment goals — read straight from the notes saved on this device, no model involved. A client with no finished notes yet just shows a short line saying so.

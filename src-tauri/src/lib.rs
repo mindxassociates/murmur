@@ -617,7 +617,7 @@ fn generate_start(state: State<AppState>, ai: State<AiState>, model: String, pro
     let model_path = if let Some(f) = model.strip_prefix("custom:") { models.join(f) } else { model_file(&models, "llm", &model).ok_or("Unknown model")?.1 };
     if !model_path.exists() { return Err("The selected model has not been downloaded".into()); }
     let mut cmd = std::process::Command::new(bin);
-    cmd.arg("-m").arg(&model_path).arg("-p").arg(prompt).arg("-n").arg("1024").arg("--temp").arg("0.3").arg("-t").arg("4").arg("--reverse-prompt").arg("<|im_end|>");
+    cmd.arg("-m").arg(&model_path).arg("-p").arg(prompt).arg("-n").arg("2048").arg("--temp").arg("0.3").arg("-t").arg("4").arg("--no-cnv").arg("--reverse-prompt").arg("<|im_end|>");
     spawn_proc(&ai, "generate", cmd)
 }
 #[tauri::command]
