@@ -1,5 +1,12 @@
 # Changelog — Auris
 
+## V1.18.0 — 2026-11-12 (a calmer, better-prepared session screen)
+
+- **A "Last time" card while you prepare**: pick a client in Step 1 and a quiet card shows the date of their most recent finished note, what was planned last time, and their treatment goals — read straight from the notes saved on this device, no model involved. A client with no finished notes yet just shows a short line saying so.
+- **Languages, together**: the session language and the note language now sit side by side in one **Languages** group at the top of Step 2, instead of one hiding in Step 2 and the other in Step 3.
+- **The whole flow on Home**: above the two big tiles, a quiet line traces the path — **1 Prepare · 2 Record · 3 Write the note · 4 Done** — and the welcome line and the empty-queue message are a little warmer.
+- **A gentle reminder in the editor**: the note editor now carries one quiet line — a draft is a starting point; review and edit it before you finalize.
+
 ## V1.17.0 — 2026-11-12 (a new name: Auris)
 
 - **Murmur is now called Auris.** Nothing else changes: it is the same app, and your database, accounts, settings, downloaded models, and backups all carry over exactly as they were — only the name on the door is new. Existing installs upgrade in place; the internal identifiers are deliberately unchanged, so your data is right where you left it. Build outputs follow the new name (Auris-…-Windows-Setup.exe, Auris-…-Windows-Portable.zip, Auris-…-macOS.dmg).

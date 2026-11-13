@@ -447,7 +447,7 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('rust: deprecated whisper main binary is not a candidate', !rustSrc.includes('"main.exe"') && !rustSrc.includes('"main"'));
   check('rust: whisper-cli.exe is the Windows whisper candidate', rustSrc.includes('&["whisper-cli.exe"]'));
   check('rust: engine search honors strict candidate priority', rustSrc.includes('for name in names'));
-  check('version V1.17.0 in UI', html.includes('Desktop V1.17.0'));
+  check('version V1.18.0 in UI', html.includes('Desktop V1.18.0'));
 
   // ================= V1.17.0: renamed Murmur -> Auris (display name only) =================
   const confJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src-tauri', 'tauri.conf.json'), 'utf8'));
@@ -456,13 +456,13 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   const changelogMd = fs.readFileSync(path.join(__dirname, '..', 'CHANGELOG.md'), 'utf8');
   check('V1.17 product name + window title are Auris', confJson.productName === 'Auris' && confJson.app.windows[0].title === 'Auris');
   check('V1.17 bundle identifier unchanged (data continuity)', confJson.identifier === 'us.mindx.murmur');
-  check('V1.17 config version is 1.17.0', confJson.version === '1.17.0');
+  check('V1.18 config version is 1.18.0', confJson.version === '1.18.0');
   check('V1.17 cargo package + lib names unchanged', /^name = "murmur"$/m.test(cargoToml) && cargoToml.includes('name = "murmur_lib"') && cargoLock.includes('name = "murmur"'));
   check('V1.17 db filename + portable env + verifier domain unchanged', rustSrc.includes('murmur.db') && rustSrc.includes('MURMUR_PORTABLE') && rustSrc.includes('murmur-access-v1'));
   check('V1.17 no user-visible Murmur left in the UI file', !html.includes('Murmur'));
   check('V1.17 internal __murmurOs hook kept', html.includes('__murmurOs'));
   check('V1.17 rendered brand is Auris', w.document.title === 'Auris' && w.document.querySelector('header h1').textContent === 'Auris');
-  check('V1.17 nav version shows Auris + Desktop V1.17.0', w.document.querySelector('.nav-version').textContent.includes('Auris') && w.document.querySelector('.nav-version').textContent.includes('Desktop V1.17.0'));
+  check('V1.17 nav version shows Auris + Desktop V1.18.0', w.document.querySelector('.nav-version').textContent.includes('Auris') && w.document.querySelector('.nav-version').textContent.includes('Desktop V1.18.0'));
   check('V1.17 changelog carries the rename entry', changelogMd.includes('now called Auris'));
 
   // V1.8.0: client default format preselects in the Studio
@@ -1152,6 +1152,64 @@ const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console
   check('V1.16 nav shows the five plain labels (ZH)', navZh[0].startsWith('首页') && navZh[1] === '来访者' && navZh[2] === '写记录' && navZh[3] === '记录' && navZh[4] === '设置');
   w.toggleUiLang(); await tick(60); await flush();
   check('V1.16 language restored to English after the nav check', w.eval('uiLang') === 'en');
+
+
+  // ================= V1.18.0 =================
+  // WS1: "Last time" prep card in Studio Step 1 — deterministic assembly
+  // from the client's most recent FINALIZED note only.
+  const dbRef3 = w.eval('db');
+  const ltClientRec = dbRef3.clients.find(c => c.id === clientId);
+  if (ltClientRec) ltClientRec.goals = 'LT GOALS marker: rebuild a regular sleep routine';
+  dbRef3.sessions.push({ id: 'lt-fin', clientId, date: '2026-10-28', format: 'soap', outputLanguage: 'follow', sections: { subjective: 'LT subj marker', plan: 'LT PLAN marker: continue the wind-down routine nightly' }, text: 'LT PLAN marker', status: 'finalized', createdAt: '2026-10-28T00:00:00.000Z', updatedAt: '2026-10-28T00:00:00.000Z' });
+  dbRef3.sessions.push({ id: 'lt-draft', clientId, date: '2026-10-29', format: 'soap', outputLanguage: 'follow', sections: { plan: 'LT DRAFT PLAN never shown' }, text: 'LT DRAFT PLAN never shown', status: 'draft', createdAt: '2026-10-29T00:00:00.000Z', updatedAt: '2026-10-29T00:00:00.000Z' });
+  w.showView('studio'); $('aiClient').value = clientId; w.applyClientDefaults(); await tick();
+  const ltHtml = $('lastTimeWrap').innerHTML;
+  check('V1.18 last-time card shows the finalized note plan excerpt', ltHtml.includes('LT PLAN marker'));
+  check('V1.18 last-time card ignores the newer draft note', !ltHtml.includes('LT DRAFT PLAN'));
+  check('V1.18 last-time card shows the finalized note date + heading', ltHtml.includes('2026-10-28') && ltHtml.includes('Last time'));
+  check('V1.18 last-time card shows the client goals line', ltHtml.includes('LT GOALS marker'));
+  w.openClient(); $('cName').value = 'LT Fresh Client'; $('cStatus').value = 'Active'; await w.saveClient(); await flush();
+  const freshId = savedState().clients.find(c => c.name === 'LT Fresh Client').id;
+  $('aiClient').value = freshId; w.applyClientDefaults(); await tick();
+  check('V1.18 client without finalized notes gets the quiet line', $('lastTimeWrap').textContent.includes('No finished notes yet'));
+  $('aiClient').value = clientId; w.applyClientDefaults(); await tick();
+  check('V1.18 switching clients updates the prep card', $('lastTimeWrap').innerHTML.includes('LT PLAN marker'));
+  await w.deleteClientForever(freshId); await flush();
+
+  // WS2: the two language selects now live together in Step 2's Languages group
+  const langGroup = $('aiLang').closest('.lang-group');
+  check('V1.18 both language selects live in the Step 2 Languages group', !!langGroup && langGroup.contains($('aiOutLang')) && langGroup.querySelector('.lang-group-title').textContent === 'Languages');
+  check('V1.18 language pair carries the new labels', langGroup.textContent.includes('Session language') && langGroup.textContent.includes('Note language'));
+  const step3Card3 = [...$('studio').querySelectorAll('.card')].find(c => !!c.querySelector('button[onclick*="generateNote"]'));
+  check('V1.18 Step 3 no longer contains aiOutLang', !!step3Card3 && !step3Card3.contains($('aiOutLang')));
+  $('aiLang').value = 'yue'; w.eval("aiAudioPath='/fake/ai-audio/a1.wav'");
+  await w.startTranscribe(); await w.aiPollOnce(); await w.aiPollOnce();
+  check('V1.18 session language still drives transcription', !!lastTranscribeArgs && lastTranscribeArgs.lang === 'yue');
+  $('aiOutLang').value = 'es';
+  check('V1.18 note language still drives the generation prompt', w.buildNotePrompt('LT source about sleep', 'brief').includes('Spanish'));
+  $('aiOutLang').value = 'follow';
+
+  // WS3: journey ribbon above the Home tiles; tiles untouched
+  w.showView('home'); await tick();
+  const journeyEl = w.document.querySelector('.journey');
+  check('V1.18 home journey ribbon shows the four steps (EN)', !!journeyEl && journeyEl.textContent.includes('Prepare') && journeyEl.textContent.includes('Record') && journeyEl.textContent.includes('Write the note') && journeyEl.textContent.includes('Done'));
+  check('V1.18 home tiles still present after the ribbon', [...w.document.querySelectorAll('.action-tile')].length === 2);
+
+  // WS4: draft-trust line inside the shared editor markup, both mount hosts
+  w.openNote(savedState().sessions[0].id); await tick();
+  check('V1.18 draft-trust line present in the editor (Notes view)', !!$('draftTrustLine') && $('noteEditorWrap').contains($('draftTrustLine')) && $('draftTrustLine').textContent.includes('starting point'));
+  w.mountEditor('workspace'); await tick();
+  check('V1.18 draft-trust line travels with the editor to the workspace panel', $('wsPanelMount').contains($('draftTrustLine')));
+  w.mountEditor('notes'); w.closeNoteEditor();
+
+  // The new strings in Chinese, then restore English
+  w.toggleUiLang(); await tick(60); await flush();
+  check('V1.18 journey ribbon renders in Chinese', w.document.querySelector('.journey').textContent.includes('准备') && w.document.querySelector('.journey').textContent.includes('录制') && w.document.querySelector('.journey').textContent.includes('写记录') && w.document.querySelector('.journey').textContent.includes('完成'));
+  check('V1.18 languages group renders in Chinese', $('aiLang').closest('.lang-group').textContent.includes('会谈语言') && $('aiLang').closest('.lang-group').textContent.includes('记录语言'));
+  $('aiClient').value = clientId; w.applyClientDefaults(); await tick();
+  check('V1.18 last-time card renders in Chinese', $('lastTimeWrap').textContent.includes('上次回顾') && $('lastTimeWrap').textContent.includes('LT PLAN marker'));
+  check('V1.18 draft-trust line renders in Chinese', $('draftTrustLine').textContent.includes('草稿只是起点'));
+  w.toggleUiLang(); await tick(60); await flush();
 
 
   // Delete flows
